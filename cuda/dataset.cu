@@ -86,6 +86,7 @@ void DataSet::to_gpu() {
 
 void DataSet::get_batch_data(float* d_batch_images, uint8_t* d_batch_labels, 
                             int batch_index, int batch_size) {
+    std::cout << "Total dataset size: " << NUM_BATCHES * NUM_IMAGES_PER_BATCH << " images" << std::endl;
 
     std::cout << "Batch index: " << batch_index << std::endl;
     std::cout << "Batch size: " << batch_size << std::endl;
