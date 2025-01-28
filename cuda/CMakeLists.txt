@@ -10,7 +10,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(CUDA REQUIRED)
 
 # Add executable
-cuda_add_executable(cuda
+cuda_add_executable(cpp_cuda
     main.cu
     dataset.cu
     conv_block.cu
@@ -19,14 +19,14 @@ cuda_add_executable(cuda
 )
 
 # Include directories
-target_include_directories(cuda PRIVATE
+target_include_directories(cpp_cuda PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
 # Set CUDA flags
-set_target_properties(cuda PROPERTIES
+set_target_properties(cpp_cuda PROPERTIES
     CUDA_SEPARABLE_COMPILATION ON
 )
 
 # Optional: Set specific GPU architecture
-set_property(TARGET cuda PROPERTY CUDA_ARCHITECTURES 75) 
+set_property(TARGET cpp_cuda PROPERTY CUDA_ARCHITECTURES 75) 
