@@ -87,25 +87,16 @@ void DataSet::to_gpu() {
 void DataSet::get_batch_data(float* d_batch_images, uint8_t* d_batch_labels, 
                             int batch_index, int batch_size) {
 
-    std::cout << "Memory calculation:" << std::endl;
-    size_t total_allocated_elements = NUM_BATCHES * NUM_IMAGES_PER_BATCH * IMAGE_SIZE;
-
     size_t image_offset = batch_index * batch_size * IMAGE_SIZE;
     size_t label_offset = batch_index * batch_size * NUM_CLASSES;
     size_t elements_to_copy = batch_size * IMAGE_SIZE;
 
-    std::cout << "Total allocated elements: " << total_allocated_elements << std::endl;
-    std::cout << "Image offset (elements): " << image_offset << std::endl;
-    std::cout << "Elements to copy: " << elements_to_copy << std::endl;
-    std::cout << "Accessing up to element: " << (image_offset + elements_to_copy) << std::endl;
-
-    if (image_offset + elements_to_copy > total_allocated_elements) {
-        throw std::runtime_error("Memory access would exceed allocated buffer");
-    }
-
+    size_t byte_offset = image_offset * sizeof(float);
+    size_t bytes_to_copy = elements_to_copy * sizeof(float);
+    
     CHECK_CUDA_ERROR(cudaMemcpy(d_batch_images, 
-                               d_images + image_offset,  
-                               batch_size * IMAGE_SIZE * sizeof(float), 
+                               reinterpret_cast<float*>(reinterpret_cast<char*>(d_images) + byte_offset),
+                               bytes_to_copy, 
                                cudaMemcpyDeviceToDevice));
     
     CHECK_CUDA_ERROR(cudaMemcpy(d_batch_labels, 
