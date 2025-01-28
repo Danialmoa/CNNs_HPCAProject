@@ -86,14 +86,17 @@ void DataSet::to_gpu() {
 
 void DataSet::get_batch_data(float* d_batch_images, uint8_t* d_batch_labels, 
                             int batch_index, int batch_size) {
-    size_t image_offset = batch_index * batch_size * IMAGE_SIZE * sizeof(float);
-    size_t label_offset = batch_index * batch_size * NUM_CLASSES * sizeof(uint8_t);
+    // Calculate offsets in terms of elements, not bytes
+    size_t image_offset = batch_index * batch_size * IMAGE_SIZE;
+    size_t label_offset = batch_index * batch_size * NUM_CLASSES;
     
-    CHECK_CUDA_ERROR(cudaMemcpy(d_batch_images, d_images + (image_offset/sizeof(float)), 
+    CHECK_CUDA_ERROR(cudaMemcpy(d_batch_images, 
+                               d_images + image_offset,  // Now offset is in elements
                                batch_size * IMAGE_SIZE * sizeof(float), 
                                cudaMemcpyDeviceToDevice));
     
-    CHECK_CUDA_ERROR(cudaMemcpy(d_batch_labels, d_labels + (label_offset/sizeof(uint8_t)), 
+    CHECK_CUDA_ERROR(cudaMemcpy(d_batch_labels, 
+                               d_labels + label_offset,  // Now offset is in elements
                                batch_size * NUM_CLASSES * sizeof(uint8_t), 
                                cudaMemcpyDeviceToDevice));
 }
