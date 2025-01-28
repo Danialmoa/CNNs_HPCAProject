@@ -1,7 +1,7 @@
-%%writefile conv_block.cu
 #include "conv_block.cuh"
 #include <random>
 #include <cmath>
+
 
 // CUDA kernels
 __global__ void conv_forward_kernel(
