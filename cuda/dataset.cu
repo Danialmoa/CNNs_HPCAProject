@@ -90,6 +90,7 @@ void DataSet::get_batch_data(float* d_batch_images, uint8_t* d_batch_labels,
     std::cout << "Memory calculation:" << std::endl;
     size_t image_offset = batch_index * batch_size * IMAGE_SIZE;
     size_t label_offset = batch_index * batch_size * NUM_CLASSES;
+    size_t elements_to_copy = batch_size * IMAGE_SIZE;
 
     std::cout << "Total allocated elements: " << total_allocated_elements << std::endl;
     std::cout << "Image offset (elements): " << image_offset << std::endl;
@@ -99,7 +100,7 @@ void DataSet::get_batch_data(float* d_batch_images, uint8_t* d_batch_labels,
     if (image_offset + elements_to_copy > total_allocated_elements) {
         throw std::runtime_error("Memory access would exceed allocated buffer");
     }
-    
+
     CHECK_CUDA_ERROR(cudaMemcpy(d_batch_images, 
                                d_images + image_offset,  
                                batch_size * IMAGE_SIZE * sizeof(float), 
