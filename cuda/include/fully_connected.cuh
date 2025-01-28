@@ -2,6 +2,7 @@
 #include <cuda_runtime.h>
 #include <vector>
 #include "cuda_utils.cuh"
+#include "adam_optimizer.cuh"
 
 class FullyConnectedLayer {
 private:
