@@ -80,7 +80,8 @@ int main() {
         FullyConnectedLayer fc(32 * 16 * 16, 10, learning_rate);  // input: 8192, output: 10
 
         // Allocate GPU memory for data and intermediate results
-        float *d_batch_images, *d_batch_labels;
+        float *d_batch_images;
+        uint8_t *d_batch_labels;
         float *d_conv_output, *d_fc_output;
         float *d_grad_conv_output, *d_grad_input;
 
