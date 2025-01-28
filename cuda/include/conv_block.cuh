@@ -1,8 +1,8 @@
-%%writefile conv_block.cuh
 #pragma once
 #include <vector>
 #include <cuda_runtime.h>
 #include "cuda_utils.cuh"
+#include "adam_optimizer.cuh"
 
 class ConvBlock {
 private:

@@ -1,6 +1,7 @@
 #include "include/fully_connected.cuh"
 #include <random>
 #include <cmath>
+#include "adam_optimizer.cuh"
 
 // CUDA kernels
 __global__ void fc_forward_kernel(
