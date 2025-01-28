@@ -88,6 +88,8 @@ void DataSet::get_batch_data(float* d_batch_images, uint8_t* d_batch_labels,
                             int batch_index, int batch_size) {
 
     std::cout << "Memory calculation:" << std::endl;
+    size_t total_allocated_elements = NUM_BATCHES * NUM_IMAGES_PER_BATCH * IMAGE_SIZE;
+
     size_t image_offset = batch_index * batch_size * IMAGE_SIZE;
     size_t label_offset = batch_index * batch_size * NUM_CLASSES;
     size_t elements_to_copy = batch_size * IMAGE_SIZE;
