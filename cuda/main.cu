@@ -63,7 +63,7 @@ int main() {
         CHECK_CUDA_ERROR(cudaSetDevice(0));
 
         // Training hyperparameters
-        const int batch_size = 100;
+        const int batch_size = 50;
         const int num_epochs = 10;
         const float learning_rate = 0.001f;
         
