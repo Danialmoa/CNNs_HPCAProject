@@ -3,6 +3,7 @@
 #include <vector>
 #include "cuda_utils.cuh"
 #include "adam_optimizer.cuh"
+#include <cstdint>
 
 class FullyConnectedLayer {
 private:
