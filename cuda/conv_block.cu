@@ -1,6 +1,7 @@
 #include "conv_block.cuh"
 #include <random>
 #include <cmath>
+#include <stdexcept>
 
 
 // CUDA kernels
