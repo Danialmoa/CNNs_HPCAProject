@@ -39,4 +39,4 @@ set_target_properties(cpp_cuda PROPERTIES
 )
 
 # Optional: Set specific GPU architecture
-set_property(TARGET cpp_cuda PROPERTY CUDA_ARCHITECTURES 70 75 80 86) 
+set_property(TARGET cpp_cuda PROPERTY CUDA_ARCHITECTURES 75)
