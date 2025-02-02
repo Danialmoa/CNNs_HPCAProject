@@ -180,6 +180,7 @@ void ConvBlock::allocate_memory(int batch_size) {
     CHECK_CUDA_ERROR(cudaMalloc(&d_conv_output_cache, conv_size * sizeof(float)));
     CHECK_CUDA_ERROR(cudaMalloc(&d_relu_output_cache, conv_size * sizeof(float)));
     CHECK_CUDA_ERROR(cudaMalloc(&d_pool_indices, conv_size * sizeof(int)));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_cache, input_size * sizeof(float)));
 }
 
 void ConvBlock::free_memory() {
@@ -198,6 +199,9 @@ void ConvBlock::forward(const float* d_input, float* d_output,
     
     // Allocate memory for this forward pass
     allocate_memory(batch_size);
+
+    size_t input_size = batch_size * in_channels * height * width;
+    CHECK_CUDA_ERROR(cudaMemcpy(d_cache, d_input, input_size * sizeof(float), cudaMemcpyDeviceToDevice));
     
     // Launch convolution + ReLU kernel
     dim3 conv_grid(batch_size, out_channels, conv_output_height * conv_output_width);
