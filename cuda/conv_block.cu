@@ -49,8 +49,9 @@ __global__ void max_pool_forward_kernel(
     
     int b = blockIdx.x;
     int c = blockIdx.y;
-    int h = blockIdx.z / output_width;
-    int w = blockIdx.z % output_width;
+    int h = (blockIdx.z * blockDim.x + threadIdx.x) / output_width;
+    int w = (blockIdx.z * blockDim.x + threadIdx.x) % output_width;
+    
     
     if (b >= batch_size || c >= channels || h >= output_height || w >= output_width) 
         return;
@@ -131,7 +132,14 @@ ConvBlock::ConvBlock(int in_channels, int out_channels, int kernel_size,
     : in_channels(in_channels), out_channels(out_channels), kernel_size(kernel_size),
       stride(stride), padding(padding), pool_size(pool_size), 
       pool_stride(pool_stride), learning_rate(learning_rate), weights_optimizer(learning_rate),
-      bias_optimizer(learning_rate)  {
+      bias_optimizer(learning_rate),
+      d_weights(nullptr), d_biases(nullptr), d_cache(nullptr),
+      d_conv_output_cache(nullptr), d_relu_output_cache(nullptr),
+      d_pool_indices(nullptr) {
+
+    if (kernel_size <= 0 || stride <= 0 || padding < 0 || pool_size <= 0 || pool_stride <= 0) {
+        throw std::invalid_argument("Invalid convolution parameters");
+    }
     
     // Initialize weights and biases
     std::vector<float> h_weights(out_channels * in_channels * kernel_size * kernel_size);
@@ -168,6 +176,7 @@ ConvBlock::~ConvBlock() {
 }
 
 void ConvBlock::allocate_memory(int batch_size) {
+    free_memory();
     // Calculate output dimensions
     conv_output_height = (input_height + 2 * padding - kernel_size) / stride + 1;
     conv_output_width = (input_width + 2 * padding - kernel_size) / stride + 1;
@@ -205,14 +214,19 @@ void ConvBlock::forward(const float* d_input, float* d_output,
     CHECK_CUDA_ERROR(cudaMemcpy(d_cache, d_input, input_size * sizeof(float), cudaMemcpyDeviceToDevice));
     
     // Launch convolution + ReLU kernel
-    dim3 conv_grid(batch_size, out_channels, conv_output_height * conv_output_width);
-    conv_forward_kernel<<<conv_grid, 1>>>(
+    const int BLOCK_SIZE = 256;
+    dim3 block(BLOCK_SIZE);
+    dim3 conv_grid(batch_size, out_channels, 
+                  (conv_output_height * conv_output_width + BLOCK_SIZE - 1) / BLOCK_SIZE);
+    
+    conv_forward_kernel<<<conv_grid, block>>>(
         d_input, d_weights, d_biases,
         d_conv_output_cache, d_relu_output_cache,
         batch_size, in_channels, out_channels,
         height, width, kernel_size, stride, padding,
         conv_output_height, conv_output_width
     );
+    
     CHECK_LAST_CUDA_ERROR();
     
     // Launch max pooling kernel
