@@ -12,8 +12,10 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 # Add debug flags for CUDA and C++
+set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -arch=sm_75")
 set(CMAKE_CUDA_FLAGS_DEBUG "${CMAKE_CUDA_FLAGS_DEBUG} -G -g")
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g")
+
 
 
 # Find CUDA
