@@ -28,11 +28,18 @@ file(GLOB SOURCES
 # Create executable
 cuda_add_executable(cnn_train ${SOURCES})
 
-# Link CUDA libraries
-target_link_libraries(cnn_train ${CUDA_LIBRARIES})
-
+# Link libraries - combine all libraries in a single command
 if(OpenMP_CXX_FOUND)
-    target_link_libraries(cnn_train PUBLIC OpenMP::OpenMP_CXX)
+    target_link_libraries(cnn_train 
+        PUBLIC 
+        ${CUDA_LIBRARIES}
+        OpenMP::OpenMP_CXX
+    )
+else()
+    target_link_libraries(cnn_train 
+        PUBLIC 
+        ${CUDA_LIBRARIES}
+    )
 endif()
 
 # Set CUDA properties
