@@ -69,7 +69,7 @@ int main() {
         
         // Initialize dataset
         std::cout << "Initializing dataset..." << std::endl;
-        DataSet dataset("../data");
+        DataSet dataset("../../data");
         dataset.load_data();
         dataset.to_gpu();
         const int num_batches = dataset.get_num_batches(batch_size);
