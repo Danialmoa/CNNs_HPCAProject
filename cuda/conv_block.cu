@@ -201,7 +201,6 @@ void ConvBlock::forward(const float* d_input, float* d_output,
     // Allocate memory for this forward pass
     allocate_memory(batch_size);
 
-    size_t input_size = batch_size * in_channels * height * width;
     size_t input_size = batch_size * in_channels * input_height * input_width;
     CHECK_CUDA_ERROR(cudaMemcpy(d_cache, d_input, input_size * sizeof(float), cudaMemcpyDeviceToDevice));
     
