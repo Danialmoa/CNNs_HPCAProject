@@ -8,16 +8,12 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Set build type to Debug if not specified
 if(NOT CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE Debug)
+    set(CMAKE_BUILD_TYPE Release)
 endif()
 
-# Add debug flags for CUDA and C++
-set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -arch=sm_70")
-set(CMAKE_CUDA_FLAGS_DEBUG "${CMAKE_CUDA_FLAGS_DEBUG} -G -g")
-set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g")
-
-
-
+# Add CUDA flags for Colab compatibility
+set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -arch=compute_75 -code=sm_75")
+set(CMAKE_CUDA_FLAGS_RELEASE "${CMAKE_CUDA_FLAGS_RELEASE} -O3")
 
 # Find CUDA
 find_package(CUDA REQUIRED)
@@ -41,5 +37,5 @@ set_target_properties(cpp_cuda PROPERTIES
     CUDA_SEPARABLE_COMPILATION ON
 )
 
-# Optional: Set specific GPU architecture
-set_property(TARGET cpp_cuda PROPERTY CUDA_ARCHITECTURES 70-real 75-real)
+# Set specific GPU architecture for Colab's T4 GPU
+set_property(TARGET cpp_cuda PROPERTY CUDA_ARCHITECTURES 75)
