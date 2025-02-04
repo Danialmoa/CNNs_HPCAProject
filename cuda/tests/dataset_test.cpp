@@ -41,8 +41,8 @@ int main() {
         // Print statistics for first few images before GPU transfer
         std::cout << "\nData statistics before GPU transfer:\n";
         for (int i = 0; i < 3; i++) {
-            print_image_stats(dataset.h_images, i);
-            print_label(dataset.h_labels, i);
+            print_image_stats(dataset.get_images(), i);
+            print_label(dataset.get_labels(), i);
             std::cout << std::endl;
         }
 

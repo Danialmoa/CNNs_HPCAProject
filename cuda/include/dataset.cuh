@@ -33,4 +33,6 @@ public:
     int get_num_batches(int batch_size) const {
         return (NUM_BATCHES * NUM_IMAGES_PER_BATCH) / batch_size;
     }
+    const std::vector<float>& get_images() const { return h_images; }
+    const std::vector<std::vector<uint8_t>>& get_labels() const { return h_labels; }
 };
