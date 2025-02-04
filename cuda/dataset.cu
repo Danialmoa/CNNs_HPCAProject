@@ -100,13 +100,6 @@ void DataSet::get_batch_data(float* d_batch_images, uint8_t* d_batch_labels,
     size_t image_offset = batch_index * NUM_IMAGES_PER_BATCH * IMAGE_SIZE;
     size_t label_offset = batch_index * NUM_IMAGES_PER_BATCH;
 
-    // Debug output
-    printf("Copying batch %d with size %d:\n", batch_index, batch_size);
-    printf("Image offset: %zu, Copy size: %zu bytes\n", 
-           image_offset, batch_size * IMAGE_SIZE * sizeof(float));
-    printf("Label offset: %zu, Copy size: %zu bytes\n", 
-           label_offset, batch_size * sizeof(uint8_t));
-
     // Copy with error checking
     cudaError_t err;
     

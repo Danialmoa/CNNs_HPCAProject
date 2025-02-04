@@ -29,49 +29,9 @@ void print_label(const std::vector<std::vector<uint8_t>>& labels, int image_idx)
     }
 }
 
-// ... existing includes and helper functions ...
-
-void verify_batch_consistency(const std::vector<float>& original_images,
-                            const std::vector<std::vector<uint8_t>>& original_labels,
-                            const std::vector<float>& batch_images,
-                            const std::vector<uint8_t>& batch_labels,
-                            int batch_idx, int batch_size) {
-    
-    for (int i = 0; i < batch_size; i++) {
-        // Calculate offsets
-        int orig_idx = batch_idx * batch_size + i;
-        int batch_offset = i * IMAGE_SIZE;
-        int orig_offset = orig_idx * IMAGE_SIZE;
-        
-        // Verify image data
-        bool image_match = true;
-        for (int j = 0; j < IMAGE_SIZE; j++) {
-            if (batch_images[batch_offset + j] != original_images[orig_offset + j]) {
-                image_match = false;
-                break;
-            }
-        }
-        
-        // Verify label
-        bool label_match = true;
-        for (int j = 0; j < NUM_CLASSES; j++) {
-            if (batch_labels[i * NUM_CLASSES + j] != original_labels[orig_idx][j]) {
-                label_match = false;
-                break;
-            }
-        }
-        
-        // Print verification results
-        std::cout << "Image " << orig_idx << " verification: " 
-                  << (image_match ? "PASS" : "FAIL") << std::endl;
-        std::cout << "Label " << orig_idx << " verification: " 
-                  << (label_match ? "PASS" : "FAIL") << std::endl;
-    }
-}
-
 int main() {
     try {
-        std::string data_path = "../../data";  // Adjust path as needed
+        std::string data_path = "../../data"; 
         DataSet dataset(data_path);
 
         std::cout << "Loading data..." << std::endl;
