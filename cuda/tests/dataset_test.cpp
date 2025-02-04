@@ -32,7 +32,7 @@ void print_label(const std::vector<std::vector<uint8_t>>& labels, int image_idx)
 int main() {
     try {
         // Initialize dataset with path to CIFAR-10 binary files
-        std::string data_path = "../../data"
+        std::string data_path = "../../data"; 
         DataSet dataset(data_path);
 
         std::cout << "Loading data..." << std::endl;
