@@ -85,18 +85,46 @@ void DataSet::to_gpu() {
 }
 
 void DataSet::get_batch_data(float* d_batch_images, uint8_t* d_batch_labels, 
-                            int batch_index, int training_batch_size) {
+                            int batch_index, int batch_size) {
+    // Validate inputs
+    if (batch_index < 0 || batch_index >= NUM_BATCHES) {
+        printf("Error: Invalid batch_index %d (max: %d)\n", batch_index, NUM_BATCHES - 1);
+        return;
+    }
+    if (batch_size <= 0 || batch_size > NUM_IMAGES_PER_BATCH) {
+        printf("Error: Invalid batch_size %d (max: %d)\n", batch_size, NUM_IMAGES_PER_BATCH);
+        return;
+    }
 
-    size_t image_offset = batch_index * training_batch_size * IMAGE_SIZE;
-    size_t label_offset = batch_index * training_batch_size * NUM_CLASSES;
+    // Calculate starting positions in memory
+    size_t image_offset = batch_index * NUM_IMAGES_PER_BATCH * IMAGE_SIZE;
+    size_t label_offset = batch_index * NUM_IMAGES_PER_BATCH;
 
-    CHECK_CUDA_ERROR(cudaMemcpy(d_batch_images, 
-                               d_images + image_offset,  
-                               training_batch_size * IMAGE_SIZE * sizeof(float), 
-                               cudaMemcpyDeviceToDevice));
+    // Debug output
+    printf("Copying batch %d with size %d:\n", batch_index, batch_size);
+    printf("Image offset: %zu, Copy size: %zu bytes\n", 
+           image_offset, batch_size * IMAGE_SIZE * sizeof(float));
+    printf("Label offset: %zu, Copy size: %zu bytes\n", 
+           label_offset, batch_size * sizeof(uint8_t));
+
+    // Copy with error checking
+    cudaError_t err;
     
-    CHECK_CUDA_ERROR(cudaMemcpy(d_batch_labels, 
-                               d_labels + label_offset, 
-                               training_batch_size * NUM_CLASSES * sizeof(uint8_t), 
-                               cudaMemcpyDeviceToDevice));
+    err = cudaMemcpy(d_batch_images, 
+                     d_images + image_offset, 
+                     batch_size * IMAGE_SIZE * sizeof(float), 
+                     cudaMemcpyDeviceToDevice);
+    if (err != cudaSuccess) {
+        printf("CUDA error copying images: %s\n", cudaGetErrorString(err));
+        return;
+    }
+
+    err = cudaMemcpy(d_batch_labels, 
+                     d_labels + label_offset, 
+                     batch_size * sizeof(uint8_t), 
+                     cudaMemcpyDeviceToDevice);
+    if (err != cudaSuccess) {
+        printf("CUDA error copying labels: %s\n", cudaGetErrorString(err));
+        return;
+    }
 }
