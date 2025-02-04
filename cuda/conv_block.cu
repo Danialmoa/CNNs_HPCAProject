@@ -304,16 +304,15 @@ void ConvBlock::forward(const float* d_input, float* d_output,
     CHECK_CUDA_ERROR(cudaMemcpy(d_cache, d_input, input_size * sizeof(float), cudaMemcpyDeviceToDevice));
     
     // Launch convolution + ReLU kernel
-    const int BLOCK_SIZE = 256;
-    dim3 block(BLOCK_SIZE);
-    dim3 conv_grid(batch_size, out_channels, 
-                  (conv_output_height * conv_output_width + BLOCK_SIZE - 1) / BLOCK_SIZE);
+    const int THREADS_PER_BLOCK = 256;
+    int total_elements = batch_size * out_channels * conv_output_height * conv_output_width;
+    int num_blocks = (total_elements + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
     
-    std::cout << "Launching conv_forward_kernel with grid: " 
-              << conv_grid.x << "x" << conv_grid.y << "x" << conv_grid.z 
-              << " block: " << block.x << std::endl;
     
-    conv_forward_kernel<<<conv_grid, block>>>(
+    std::cout << "Launching conv_forward_kernel with " << num_blocks 
+              << " blocks, " << THREADS_PER_BLOCK << " threads per block" << std::endl;
+    
+    conv_forward_kernel<<<num_blocks, THREADS_PER_BLOCK>>>(
         d_input, d_weights, d_biases,
         d_conv_output_cache, d_relu_output_cache,
         batch_size, in_channels, out_channels,
@@ -324,12 +323,13 @@ void ConvBlock::forward(const float* d_input, float* d_output,
     CHECK_LAST_CUDA_ERROR();
     
     // Launch max pooling kernel
-    dim3 pool_grid(batch_size, out_channels, pool_output_height * pool_output_width);
+    total_elements = batch_size * out_channels * pool_output_height * pool_output_width;
+    num_blocks = (total_elements + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
     
-    std::cout << "Launching max_pool_forward_kernel with grid: " 
-              << pool_grid.x << "x" << pool_grid.y << "x" << pool_grid.z << std::endl;
+    std::cout << "Launching max_pool_forward_kernel with " << num_blocks 
+              << " blocks, " << THREADS_PER_BLOCK << " threads per block" << std::endl;
     
-    max_pool_forward_kernel<<<pool_grid, 1>>>(
+    max_pool_forward_kernel<<<num_blocks, THREADS_PER_BLOCK>>>(
         d_relu_output_cache, d_output, d_pool_indices,
         batch_size, out_channels, conv_output_height, conv_output_width,
         pool_size, pool_stride,
@@ -339,7 +339,6 @@ void ConvBlock::forward(const float* d_input, float* d_output,
     
     std::cout << "Forward pass completed successfully" << std::endl;
 }
-
 void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int batch_size) {
     std::cout << "Backward pass - batch_size: " << batch_size << std::endl;
     
@@ -356,13 +355,15 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
     CHECK_CUDA_ERROR(cudaMemset(d_grad_input, 0, 
         batch_size * in_channels * input_height * input_width * sizeof(float)));
     
-    // Launch backward kernel
-    dim3 grid(batch_size, out_channels, conv_output_height * conv_output_width);
+    // Simplified kernel launch configuration
+    const int THREADS_PER_BLOCK = 256;
+    int total_elements = batch_size * out_channels * conv_output_height * conv_output_width;
+    int num_blocks = (total_elements + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
     
-    std::cout << "Launching conv_backward_kernel with grid: " 
-              << grid.x << "x" << grid.y << "x" << grid.z << std::endl;
+    std::cout << "Launching conv_backward_kernel with " << num_blocks 
+              << " blocks, " << THREADS_PER_BLOCK << " threads per block" << std::endl;
     
-    conv_backward_kernel<<<grid, 1>>>(
+    conv_backward_kernel<<<num_blocks, THREADS_PER_BLOCK>>>(
         d_grad_output, d_weights,
         d_grad_input, d_grad_weights, d_grad_biases,
         d_cache, d_relu_output_cache,
@@ -371,8 +372,6 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
         conv_output_height, conv_output_width
     );
     CHECK_LAST_CUDA_ERROR();
-    
-    std::cout << "Updating weights and biases" << std::endl;
     
     // Update weights and biases using optimizers
     weights_optimizer.update(d_weights, d_grad_weights);
