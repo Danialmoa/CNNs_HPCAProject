@@ -3,121 +3,96 @@
 #include <stdexcept>
 #include <iostream>
 
-DataSet::DataSet(const std::string& data_path_root) 
-    : data_path_root(data_path_root), d_images(nullptr), d_labels(nullptr) {
-    
-    h_labels.resize(NUM_BATCHES * NUM_IMAGES_PER_BATCH, std::vector<uint8_t>(NUM_CLASSES, 0));
-    h_images.resize(NUM_BATCHES * NUM_IMAGES_PER_BATCH * IMAGE_SIZE, 0.0f);
+DataSet::DataSet(const std::string& path) : data_path_root(path) {
+    d_images = nullptr;
+    d_labels = nullptr;
 }
 
 DataSet::~DataSet() {
-    if (d_images) {
-        CHECK_CUDA_ERROR(cudaFree(d_images));
-    }
-    if (d_labels) {
-        CHECK_CUDA_ERROR(cudaFree(d_labels));
-    }
+    if (d_images) cudaFree(d_images);
+    if (d_labels) cudaFree(d_labels);
 }
 
 void DataSet::load_data() {
-    const float CIFAR_MEANS[3] = {0.4914f, 0.4822f, 0.4465f};
-    const float CIFAR_STDS[3] = {0.2470f, 0.2435f, 0.2616f};
-
-    #pragma omp parallel for schedule(dynamic)
-    for (int i = 0; i < NUM_BATCHES; i++) {
-        std::string data_path = data_path_root + "/data_batch_" + std::to_string(i + 1) + ".bin";
+    for (int batch = 1; batch <= 5; batch++) {
+        std::string data_path = data_path_root + "/data_batch_" + std::to_string(batch) + ".bin";
         std::ifstream file(data_path, std::ios::binary);
         
         if (!file.is_open()) {
-            #pragma omp critical
-            {
-                throw std::runtime_error("Error: Could not open file " + data_path);
-            }
-            continue;
+            throw std::runtime_error("Error: Could not open file " + data_path);
         }
 
-        for (int j = 0; j < NUM_IMAGES_PER_BATCH; ++j) {
-            int image_offset = (i * NUM_IMAGES_PER_BATCH + j) * IMAGE_SIZE;
+        int offset = (batch - 1) * 10000;  // Each file has 10000 images
 
-            // Read label
+        // Read each image in the batch
+        for (int i = 0; i < 10000; i++) {
+            int img_idx = offset + i;
+            
+            // Read label (1 byte)
             uint8_t label;
             file.read(reinterpret_cast<char*>(&label), 1);
-            h_labels[i * NUM_IMAGES_PER_BATCH + j][label] = 1;
 
-            // Read and normalize image data
-            for (int k = 0; k < 3; ++k) {
-                for (int h = 0; h < 32; ++h) {
-                    for (int w = 0; w < 32; ++w) {
-                        uint8_t pixel;
-                        file.read(reinterpret_cast<char*>(&pixel), 1);
-                        int idx = image_offset + k * 32 * 32 + h * 32 + w;
-                        h_images[idx] = (pixel / 255.0f - CIFAR_MEANS[k]) / CIFAR_STDS[k];
-                    }
-                }
+            // Convert to one-hot encoding
+            for (int j = 0; j < NUM_CLASSES; j++) {
+                h_labels[img_idx * NUM_CLASSES + j] = (j == label) ? 1 : 0;
+            }
+
+            // Read image data (3072 bytes = 32*32*3)
+            std::vector<uint8_t> temp_buffer(IMAGE_SIZE);
+            file.read(reinterpret_cast<char*>(temp_buffer.data()), IMAGE_SIZE);
+
+            // Convert and normalize image data
+            for (int j = 0; j < IMAGE_SIZE; j++) {
+                float pixel_value = static_cast<float>(temp_buffer[j]) / 255.0f;
+                h_images[img_idx * IMAGE_SIZE + j] = pixel_value;
             }
         }
+        
         file.close();
     }
+
+    std::cout << "Loaded " << NUM_IMAGES_TOTAL << " images successfully." << std::endl;
 }
 
 void DataSet::to_gpu() {
-    size_t images_size = NUM_BATCHES * NUM_IMAGES_PER_BATCH * IMAGE_SIZE * sizeof(float);
-    CHECK_CUDA_ERROR(cudaMalloc(&d_images, images_size));
-    CHECK_CUDA_ERROR(cudaMemcpy(d_images, h_images.data(), images_size, cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMalloc(&d_images, NUM_IMAGES_TOTAL * IMAGE_SIZE * sizeof(float)));
+    CUDA_CHECK(cudaMalloc(&d_labels, NUM_IMAGES_TOTAL * NUM_CLASSES * sizeof(uint8_t)));
 
-    // Allocate GPU memory for labels
-    size_t labels_size = NUM_BATCHES * NUM_IMAGES_PER_BATCH * NUM_CLASSES * sizeof(uint8_t);
-    CHECK_CUDA_ERROR(cudaMalloc(&d_labels, labels_size));
+    CUDA_CHECK(cudaMemcpy(d_images, h_images.data(), 
+                         NUM_IMAGES_TOTAL * IMAGE_SIZE * sizeof(float), 
+                         cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_labels, h_labels.data(), 
+                         NUM_IMAGES_TOTAL * NUM_CLASSES * sizeof(uint8_t), 
+                         cudaMemcpyHostToDevice));
     
-    // Create contiguous array for labels
-    std::vector<uint8_t> h_labels_contiguous(NUM_BATCHES * NUM_IMAGES_PER_BATCH * NUM_CLASSES);
-    for (int i = 0; i < h_labels.size(); i++) {
-        std::copy(h_labels[i].begin(), h_labels[i].end(), 
-                 h_labels_contiguous.begin() + i * NUM_CLASSES);
-    }
-    
-    CHECK_CUDA_ERROR(cudaMemcpy(d_labels, h_labels_contiguous.data(), 
-                               labels_size, cudaMemcpyHostToDevice));
-
-    // Free CPU memory after transfer
     std::vector<float>().swap(h_images);
-    std::vector<std::vector<uint8_t>>().swap(h_labels);
+    std::vector<uint8_t>().swap(h_labels);
 }
-
 void DataSet::get_batch_data(float* d_batch_images, uint8_t* d_batch_labels, 
-                            int batch_index, int batch_size) {
-    // Validate inputs
-    if (batch_index < 0 || batch_index >= NUM_BATCHES) {
-        printf("Error: Invalid batch_index %d (max: %d)\n", batch_index, NUM_BATCHES - 1);
-        return;
-    }
-    if (batch_size <= 0 || batch_size > NUM_IMAGES_PER_BATCH) {
-        printf("Error: Invalid batch_size %d (max: %d)\n", batch_size, NUM_IMAGES_PER_BATCH);
-        return;
+                           int batch_index, int batch_size) {
+    // Calculate starting position
+    size_t image_offset = batch_index * batch_size * IMAGE_SIZE;
+    size_t label_offset = batch_index * batch_size * NUM_CLASSES;
+
+    // Validate batch index
+    if (batch_index * batch_size >= NUM_IMAGES_TOTAL) {
+        throw std::runtime_error("Batch index out of range");
     }
 
-    // Calculate starting positions in memory
-    size_t image_offset = batch_index * NUM_IMAGES_PER_BATCH * IMAGE_SIZE;
-    size_t label_offset = batch_index * NUM_IMAGES_PER_BATCH;
+    // Calculate actual batch size (might be smaller for last batch)
+    int actual_batch_size = std::min(batch_size, 
+                                   NUM_IMAGES_TOTAL - batch_index * batch_size);
 
-    // Copy with error checking
-    cudaError_t err;
-    
-    err = cudaMemcpy(d_batch_images, 
-                     d_images + image_offset, 
-                     batch_size * IMAGE_SIZE * sizeof(float), 
-                     cudaMemcpyDeviceToDevice);
-    if (err != cudaSuccess) {
-        printf("CUDA error copying images: %s\n", cudaGetErrorString(err));
-        return;
-    }
+    // Copy batch data
+    size_t image_copy_size = actual_batch_size * IMAGE_SIZE * sizeof(float);
+    size_t label_copy_size = actual_batch_size * NUM_CLASSES * sizeof(uint8_t);
 
-    err = cudaMemcpy(d_batch_labels, 
-                     d_labels + label_offset, 
-                     batch_size * sizeof(uint8_t), 
-                     cudaMemcpyDeviceToDevice);
-    if (err != cudaSuccess) {
-        printf("CUDA error copying labels: %s\n", cudaGetErrorString(err));
-        return;
-    }
+    std::cout << "Copying batch " << batch_index << " with size " << actual_batch_size << ":" << std::endl;
+    std::cout << "Image offset: " << image_offset << ", Copy size: " << image_copy_size << " bytes" << std::endl;
+    std::cout << "Label offset: " << label_offset << ", Copy size: " << label_copy_size << " bytes" << std::endl;
+
+    CUDA_CHECK(cudaMemcpy(d_batch_images, d_images + image_offset, 
+                         image_copy_size, cudaMemcpyDeviceToDevice));
+    CUDA_CHECK(cudaMemcpy(d_batch_labels, d_labels + label_offset, 
+                         label_copy_size, cudaMemcpyDeviceToDevice));
 }

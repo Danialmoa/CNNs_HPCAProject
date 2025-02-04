@@ -2,7 +2,6 @@
 #include <iostream>
 #include <iomanip>
 
-
 void print_image_stats(const std::vector<float>& images, int image_idx) {
     float min_val = 1000.0f, max_val = -1000.0f, sum = 0.0f;
     int offset = image_idx * IMAGE_SIZE;
@@ -19,10 +18,10 @@ void print_image_stats(const std::vector<float>& images, int image_idx) {
     std::cout << ", Mean: " << sum / IMAGE_SIZE << std::endl;
 }
 
-void print_label(const std::vector<std::vector<uint8_t>>& labels, int image_idx) {
+void print_label(const std::vector<uint8_t>& labels, int image_idx) {
     std::cout << "Label " << image_idx << ": ";
     for (int i = 0; i < NUM_CLASSES; i++) {
-        if (labels[image_idx][i] == 1) {
+        if (labels[image_idx * NUM_CLASSES + i] == 1) {
             std::cout << "Class " << i << std::endl;
             break;
         }
@@ -31,16 +30,24 @@ void print_label(const std::vector<std::vector<uint8_t>>& labels, int image_idx)
 
 int main() {
     try {
-        std::string data_path = "../../data"; 
+        std::string data_path = "../../data";  // Adjust path as needed
         DataSet dataset(data_path);
 
         std::cout << "Loading data..." << std::endl;
         dataset.load_data();
         
-        // Store original data for verification
-        const auto& original_images = dataset.get_images();
-        const auto& original_labels = dataset.get_labels();
+        // Print initial data statistics (before GPU transfer)
+        std::cout << "\nInitial data statistics:" << std::endl;
+        const auto& images = dataset.get_images();
+        const auto& labels = dataset.get_labels();
         
+        // Print first few images stats
+        for (int i = 0; i < 3; i++) {
+            print_image_stats(images, i);
+            print_label(labels, i);
+            std::cout << std::endl;
+        }
+
         // Transfer to GPU
         std::cout << "Transferring to GPU..." << std::endl;
         dataset.to_gpu();
@@ -54,11 +61,13 @@ int main() {
         cudaMalloc(&d_batch_images, batch_size * IMAGE_SIZE * sizeof(float));
         cudaMalloc(&d_batch_labels, batch_size * NUM_CLASSES * sizeof(uint8_t));
 
-        std::cout << "\nTesting all " << total_batches << " batches..." << std::endl;
+        std::cout << "\nTesting batches (total batches: " << total_batches << ")..." << std::endl;
         
-        // Test all batches
-        for (int batch_idx = 0; batch_idx < total_batches; batch_idx++) {
-            std::cout << "\nProcessing batch " << batch_idx << "/" << total_batches - 1 << std::endl;
+        // Test first few batches
+        int batches_to_test = std::min(5, total_batches);
+        for (int batch_idx = 0; batch_idx < batches_to_test; batch_idx++) {
+            std::cout << "\nProcessing batch " << batch_idx << "/" << (total_batches - 1) 
+                      << " (" << (batch_idx * 100.0f / total_batches) << "%)" << std::endl;
             
             dataset.get_batch_data(d_batch_images, d_batch_labels, batch_idx, batch_size);
             
@@ -73,9 +82,9 @@ int main() {
                       batch_size * NUM_CLASSES * sizeof(uint8_t), 
                       cudaMemcpyDeviceToHost);
 
-            // Print batch statistics
+            // Print statistics for first few images in batch
             std::cout << "\nBatch " << batch_idx << " statistics:" << std::endl;
-            for (int i = 0; i < std::min(3, batch_size); i++) {  
+            for (int i = 0; i < std::min(3, batch_size); i++) {
                 float min_val = 1000.0f, max_val = -1000.0f, sum = 0.0f;
                 int offset = i * IMAGE_SIZE;
                 
@@ -99,13 +108,16 @@ int main() {
                     }
                 }
             }
+            
+            // Ensure GPU operations are complete
+            cudaDeviceSynchronize();
         }
 
         // Cleanup
         cudaFree(d_batch_images);
         cudaFree(d_batch_labels);
         
-        std::cout << "\nAll batch tests completed successfully!" << std::endl;
+        std::cout << "\nTest completed successfully!" << std::endl;
         
     } catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << std::endl;

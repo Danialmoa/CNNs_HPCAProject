@@ -6,8 +6,7 @@
 
 
 
-static const int NUM_IMAGES_PER_BATCH = 10000;
-static const int NUM_BATCHES = 5;
+static const int NUM_IMAGES_TOTAL = 50000;
 static const int IMAGE_SIZE = 3 * 32 * 32;
 static const int NUM_CLASSES = 10;
 
@@ -31,7 +30,7 @@ public:
                        int batch_index, int batch_size);
     
     int get_num_batches(int batch_size) const {
-        return (NUM_BATCHES * NUM_IMAGES_PER_BATCH) / batch_size;
+        return NUM_IMAGES_TOTAL / batch_size;
     }
     const std::vector<float>& get_images() const { return h_images; }
     const std::vector<std::vector<uint8_t>>& get_labels() const { return h_labels; }
