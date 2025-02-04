@@ -2,6 +2,7 @@
 #include <iostream>
 #include <iomanip>
 
+
 void print_image_stats(const std::vector<float>& images, int image_idx) {
     float min_val = 1000.0f, max_val = -1000.0f, sum = 0.0f;
     int offset = image_idx * IMAGE_SIZE;
