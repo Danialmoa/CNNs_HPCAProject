@@ -289,25 +289,24 @@ void ConvBlock::free_memory() {
     if (d_pool_indices) cudaFree(d_pool_indices);
 }
 
-void ConvBlock::forward(const float* d_input, float* d_output, 
-                       int batch_size, int height, int width) {
-    std::cout << "Forward pass - Input dimensions: " << height << "x" << width 
-              << " batch_size: " << batch_size << std::endl;
-              
+void ConvBlock::forward(const float* d_input, float* d_output, int batch_size, int height, int width) {
     input_height = height;
     input_width = width;
     
     // Allocate memory for this forward pass
     allocate_memory(batch_size);
 
+    // Copy input to cache
     size_t input_size = batch_size * in_channels * input_height * input_width;
-    CHECK_CUDA_ERROR(cudaMemcpy(d_cache, d_input, input_size * sizeof(float), cudaMemcpyDeviceToDevice));
+    cudaMemcpy(d_cache, d_input, input_size * sizeof(float), cudaMemcpyDeviceToDevice);
     
-    // Launch convolution + ReLU kernel
-    dim3 block(256);
-    dim3 grid((batch_size * out_channels * conv_output_height * conv_output_width + block.x - 1) / block.x);
+    // Very basic kernel launch configuration
+    int threadsPerBlock = 256;
+    int totalElements = batch_size * out_channels * conv_output_height * conv_output_width;
+    int blocksPerGrid = (totalElements + threadsPerBlock - 1) / threadsPerBlock;
     
-    conv_forward_kernel<<<grid, block>>>(
+    // Launch convolution kernel
+    conv_forward_kernel<<<blocksPerGrid, threadsPerBlock>>>(
         d_cache,
         d_weights,
         d_biases,
@@ -325,17 +324,19 @@ void ConvBlock::forward(const float* d_input, float* d_output,
         conv_output_width
     );
     
+    // Synchronize and check for errors
+    cudaDeviceSynchronize();
     cudaError_t err = cudaGetLastError();
     if (err != cudaSuccess) {
-        std::cerr << "CUDA error in conv_forward_kernel: " << cudaGetErrorString(err) << std::endl;
+        printf("CUDA Error: %s\n", cudaGetErrorString(err));
         return;
     }
     
+    // Launch pooling kernel
+    totalElements = batch_size * out_channels * pool_output_height * pool_output_width;
+    blocksPerGrid = (totalElements + threadsPerBlock - 1) / threadsPerBlock;
     
-    // Launch max pooling kernel
-    grid.x = (batch_size * out_channels * pool_output_height * pool_output_width + block.x - 1) / block.x;
-
-    max_pool_forward_kernel<<<grid, block>>>(
+    max_pool_forward_kernel<<<blocksPerGrid, threadsPerBlock>>>(
         d_relu_output_cache,
         d_output,
         d_pool_indices,
@@ -349,13 +350,14 @@ void ConvBlock::forward(const float* d_input, float* d_output,
         pool_output_width
     );
     
+    // Synchronize and check for errors
+    cudaDeviceSynchronize();
     err = cudaGetLastError();
     if (err != cudaSuccess) {
-        std::cerr << "CUDA error in max_pool_forward_kernel: " << cudaGetErrorString(err) << std::endl;
+        printf("CUDA Error: %s\n", cudaGetErrorString(err));
         return;
     }
 }
-
 
 void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int batch_size) {
     std::cout << "Backward pass - batch_size: " << batch_size << std::endl;

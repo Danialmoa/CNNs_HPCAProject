@@ -1,25 +1,15 @@
 cmake_minimum_required(VERSION 3.8)
 project(SimpleNeuralNetworkGPU CUDA CXX)
 
-set(CMAKE_CUDA_STANDARD 14)
-set(CMAKE_CUDA_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_STANDARD 14)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
+# Force CUDA compiler to use older toolchain
+set(CMAKE_CUDA_COMPILER_TOOLKIT_VERSION "11.0")
+set(CMAKE_CUDA_ARCHITECTURES 70)  # Using a more compatible architecture
+set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --ptxas-options=-v -arch=sm_70")
 
-# Set build type to Debug if not specified
-if(NOT CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE Release)
-endif()
-
-# Add CUDA flags for Colab compatibility
-set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -arch=compute_75 -code=sm_75")
-set(CMAKE_CUDA_FLAGS_RELEASE "${CMAKE_CUDA_FLAGS_RELEASE} -O3")
-
-# Find CUDA
 find_package(CUDA REQUIRED)
 
 # Add executable
-cuda_add_executable(cpp_cuda
+add_executable(cpp_cuda
     main.cu
     dataset.cu
     conv_block.cu
@@ -27,15 +17,12 @@ cuda_add_executable(cpp_cuda
     adam_optimizer.cu
 )
 
-# Include directories
-target_include_directories(cpp_cuda PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-)
-
-# Set CUDA flags
+# Set properties
 set_target_properties(cpp_cuda PROPERTIES
     CUDA_SEPARABLE_COMPILATION ON
+    CUDA_ARCHITECTURES 70
+    POSITION_INDEPENDENT_CODE ON
 )
 
-# Set specific GPU architecture for Colab's T4 GPU
-set_property(TARGET cpp_cuda PROPERTY CUDA_ARCHITECTURES 75)
+# Include directories
+target_include_directories(cpp_cuda PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
