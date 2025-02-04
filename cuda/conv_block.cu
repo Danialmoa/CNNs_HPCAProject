@@ -304,41 +304,59 @@ void ConvBlock::forward(const float* d_input, float* d_output,
     CHECK_CUDA_ERROR(cudaMemcpy(d_cache, d_input, input_size * sizeof(float), cudaMemcpyDeviceToDevice));
     
     // Launch convolution + ReLU kernel
-    const int THREADS_PER_BLOCK = 256;
-    int total_elements = batch_size * out_channels * conv_output_height * conv_output_width;
-    int num_blocks = (total_elements + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
+    dim3 block(256);
+    dim3 grid((batch_size * out_channels * conv_output_height * conv_output_width + block.x - 1) / block.x);
     
-    
-    std::cout << "Launching conv_forward_kernel with " << num_blocks 
-              << " blocks, " << THREADS_PER_BLOCK << " threads per block" << std::endl;
-    
-    conv_forward_kernel<<<num_blocks, THREADS_PER_BLOCK>>>(
-        d_input, d_weights, d_biases,
-        d_conv_output_cache, d_relu_output_cache,
-        batch_size, in_channels, out_channels,
-        height, width, kernel_size, stride, padding,
-        conv_output_height, conv_output_width
+    conv_forward_kernel<<<grid, block>>>(
+        d_cache,
+        d_weights,
+        d_biases,
+        d_conv_output_cache,
+        d_relu_output_cache,
+        batch_size,
+        in_channels,
+        out_channels,
+        height,
+        width,
+        kernel_size,
+        stride,
+        padding,
+        conv_output_height,
+        conv_output_width
     );
     
-    CHECK_LAST_CUDA_ERROR();
+    cudaError_t err = cudaGetLastError();
+    if (err != cudaSuccess) {
+        std::cerr << "CUDA error in conv_forward_kernel: " << cudaGetErrorString(err) << std::endl;
+        return;
+    }
+    
     
     // Launch max pooling kernel
-    total_elements = batch_size * out_channels * pool_output_height * pool_output_width;
-    num_blocks = (total_elements + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
-    
-    std::cout << "Launching max_pool_forward_kernel with " << num_blocks 
-              << " blocks, " << THREADS_PER_BLOCK << " threads per block" << std::endl;
-    
-    max_pool_forward_kernel<<<num_blocks, THREADS_PER_BLOCK>>>(
-        d_relu_output_cache, d_output, d_pool_indices,
-        batch_size, out_channels, conv_output_height, conv_output_width,
-        pool_size, pool_stride,
-        pool_output_height, pool_output_width
+    grid.x = (batch_size * out_channels * pool_output_height * pool_output_width + block.x - 1) / block.x;
+
+    max_pool_forward_kernel<<<grid, block>>>(
+        d_relu_output_cache,
+        d_output,
+        d_pool_indices,
+        batch_size,
+        out_channels,
+        conv_output_height,
+        conv_output_width,
+        pool_size,
+        pool_stride,
+        pool_output_height,
+        pool_output_width
     );
-    CHECK_LAST_CUDA_ERROR();
     
-    std::cout << "Forward pass completed successfully" << std::endl;
+    err = cudaGetLastError();
+    if (err != cudaSuccess) {
+        std::cerr << "CUDA error in max_pool_forward_kernel: " << cudaGetErrorString(err) << std::endl;
+        return;
+    }
 }
+
+
 void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int batch_size) {
     std::cout << "Backward pass - batch_size: " << batch_size << std::endl;
     
