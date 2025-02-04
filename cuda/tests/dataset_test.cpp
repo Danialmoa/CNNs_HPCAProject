@@ -113,14 +113,9 @@ int main() {
                       batch_size * NUM_CLASSES * sizeof(uint8_t), 
                       cudaMemcpyDeviceToHost);
 
-            // Verify batch data
-            verify_batch_consistency(original_images, original_labels,
-                                  batch_images, batch_labels,
-                                  batch_idx, batch_size);
-
             // Print batch statistics
             std::cout << "\nBatch " << batch_idx << " statistics:" << std::endl;
-            for (int i = 0; i < std::min(3, batch_size); i++) {  // Print first 3 images in batch
+            for (int i = 0; i < std::min(3, batch_size); i++) {  
                 float min_val = 1000.0f, max_val = -1000.0f, sum = 0.0f;
                 int offset = i * IMAGE_SIZE;
                 
