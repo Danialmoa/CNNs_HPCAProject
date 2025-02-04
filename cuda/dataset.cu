@@ -55,13 +55,13 @@ void DataSet::load_data() {
 }
 
 void DataSet::to_gpu() {
-    CUDA_CHECK(cudaMalloc(&d_images, NUM_IMAGES_TOTAL * IMAGE_SIZE * sizeof(float)));
-    CUDA_CHECK(cudaMalloc(&d_labels, NUM_IMAGES_TOTAL * NUM_CLASSES * sizeof(uint8_t)));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_images, NUM_IMAGES_TOTAL * IMAGE_SIZE * sizeof(float)));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_labels, NUM_IMAGES_TOTAL * NUM_CLASSES * sizeof(uint8_t)));
 
-    CUDA_CHECK(cudaMemcpy(d_images, h_images.data(), 
+    CHECK_CUDA_ERROR(cudaMemcpy(d_images, h_images.data(), 
                          NUM_IMAGES_TOTAL * IMAGE_SIZE * sizeof(float), 
                          cudaMemcpyHostToDevice));
-    CUDA_CHECK(cudaMemcpy(d_labels, h_labels.data(), 
+    CHECK_CUDA_ERROR(cudaMemcpy(d_labels, h_labels.data(), 
                          NUM_IMAGES_TOTAL * NUM_CLASSES * sizeof(uint8_t), 
                          cudaMemcpyHostToDevice));
     
@@ -91,8 +91,8 @@ void DataSet::get_batch_data(float* d_batch_images, uint8_t* d_batch_labels,
     std::cout << "Image offset: " << image_offset << ", Copy size: " << image_copy_size << " bytes" << std::endl;
     std::cout << "Label offset: " << label_offset << ", Copy size: " << label_copy_size << " bytes" << std::endl;
 
-    CUDA_CHECK(cudaMemcpy(d_batch_images, d_images + image_offset, 
+    CHECK_CUDA_ERROR(cudaMemcpy(d_batch_images, d_images + image_offset, 
                          image_copy_size, cudaMemcpyDeviceToDevice));
-    CUDA_CHECK(cudaMemcpy(d_batch_labels, d_labels + label_offset, 
+    CHECK_CUDA_ERROR(cudaMemcpy(d_batch_labels, d_labels + label_offset, 
                          label_copy_size, cudaMemcpyDeviceToDevice));
 }
