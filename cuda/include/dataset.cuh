@@ -17,7 +17,7 @@ private:
     float* d_images;            // GPU memory for images
     uint8_t* d_labels;          // GPU memory for labels
     std::vector<float> h_images;     // CPU memory for images
-    std::vector<std::vector<uint8_t>> h_labels; // CPU memory for labels
+    std::vector<uint8_t> h_labels; // CPU memory for labels
 
 public:
     DataSet(const std::string& data_path_root);
@@ -33,5 +33,5 @@ public:
         return NUM_IMAGES_TOTAL / batch_size;
     }
     const std::vector<float>& get_images() const { return h_images; }
-    const std::vector<std::vector<uint8_t>>& get_labels() const { return h_labels; }
+    const std::vector<uint8_t>& get_labels() const { return h_labels; }
 };
