@@ -16,8 +16,9 @@ __global__ void conv_forward_kernel(
     
     int b = blockIdx.x; // Batch Index
     int oc = blockIdx.y; // output channels
-    int h = blockIdx.z / output_width; // height
-    int w = blockIdx.z % output_width; // width
+    int idx = blockIdx.z * blockDim.x + threadIdx.x;
+    int h = idx / output_width; // height
+    int w = idx % output_width; // width
     
     if (b >= batch_size || oc >= out_channels || h >= output_height || w >= output_width) 
         return;
