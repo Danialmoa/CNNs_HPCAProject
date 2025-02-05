@@ -249,30 +249,37 @@ void ConvBlock::forward(const float* d_input, float* d_output, int batch_size, i
 
     CHECK_CUDA_ERROR(cudaMemcpy(d_cache, d_input, input_size, cudaMemcpyDeviceToDevice));
 
+    std::cout << "\nKernel parameters verification:" << std::endl;
+    std::cout << "Pointers:" << std::endl;
+    std::cout << "  d_cache: " << d_cache << std::endl;
+    std::cout << "  d_weights: " << d_weights << std::endl;
+    std::cout << "  d_biases: " << d_biases << std::endl;
+    std::cout << "  d_conv_output_cache: " << d_conv_output_cache << std::endl;
+    std::cout << "  d_relu_output_cache: " << d_relu_output_cache << std::endl;
+
+    std::cout << "\nDimensions:" << std::endl;
+    std::cout << "  batch_size: " << batch_size << std::endl;
+    std::cout << "  in_channels: " << in_channels << std::endl;
+    std::cout << "  out_channels: " << out_channels << std::endl;
+    std::cout << "  height: " << height << std::endl;
+    std::cout << "  width: " << width << std::endl;
+    std::cout << "  kernel_size: " << kernel_size << std::endl;
+    std::cout << "  stride: " << stride << std::endl;
+    std::cout << "  padding: " << padding << std::endl;
+    std::cout << "  conv_output_height: " << conv_output_height << std::endl;
+    std::cout << "  conv_output_width: " << conv_output_width << std::endl;
+
     dim3 gridDim(batch_size, 
                  out_channels, 
                  (conv_output_height * conv_output_width + 255) / 256);
     dim3 blockDim(256);
 
-    std::cout << "Launching conv forward kernel with grid: " 
-              << gridDim.x << "x" << gridDim.y << "x" << gridDim.z 
-              << " block: " << blockDim.x << std::endl;
+    std::cout << "\nGrid configuration:" << std::endl;
+    std::cout << "  gridDim: " << gridDim.x << "x" << gridDim.y << "x" << gridDim.z << std::endl;
+    std::cout << "  blockDim: " << blockDim.x << std::endl;
+    std::cout << "  total_spatial_elements: " << total_spatial_elements << std::endl;
 
-    std::cout << "Batch size: " << batch_size << std::endl;
-    std::cout << "Out channels: " << out_channels << std::endl;
-    std::cout << "Conv output height: " << conv_output_height << std::endl;
-    std::cout << "Conv output width: " << conv_output_width << std::endl;
-    std::cout << "In channels: " << in_channels << std::endl;
-    std::cout << "Height: " << height << std::endl;
-    std::cout << "Width: " << width << std::endl;
-    std::cout << "Kernel size: " << kernel_size << std::endl;
-    std::cout << "Stride: " << stride << std::endl;
-    std::cout << "Padding: " << padding << std::endl;
-    std::cout << "Pool size: " << pool_size << std::endl;
-    std::cout << "Pool stride: " << pool_stride << std::endl;
-    std::cout << "Pool output height: " << pool_output_height << std::endl;
-    std::cout << "Pool output width: " << pool_output_width << std::endl;
-
+    std::cout << "\nLaunching kernel..." << std::endl;
     conv_forward_kernel<<<gridDim, blockDim>>>(
         d_cache,
         d_weights,
