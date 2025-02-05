@@ -396,7 +396,15 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
         input_height, input_width, kernel_size, stride, padding,
         conv_output_height, conv_output_width
     );
-    cudaError_t err = cudaGetLastError();
+    CHECK_LAST_CUDA_ERROR();
+    
+    std::cout << "Launching conv backward kernel with grid: " 
+              << gridDim.x << "x" << gridDim.y << "x" << gridDim.z 
+              << " block: " << blockDim.x << std::endl;
+
+    // Synchronize and check for errors
+    cudaDeviceSynchronize();
+    err = cudaGetLastError();
     if (err != cudaSuccess) {
         printf("CUDA Error: %s\n", cudaGetErrorString(err));
         return;
