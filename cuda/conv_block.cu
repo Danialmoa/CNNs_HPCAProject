@@ -277,7 +277,6 @@ void ConvBlock::forward(const float* d_input, float* d_output, int batch_size, i
     std::cout << "\nGrid configuration:" << std::endl;
     std::cout << "  gridDim: " << gridDim.x << "x" << gridDim.y << "x" << gridDim.z << std::endl;
     std::cout << "  blockDim: " << blockDim.x << std::endl;
-    std::cout << "  total_spatial_elements: " << total_spatial_elements << std::endl;
 
     std::cout << "\nLaunching kernel..." << std::endl;
     conv_forward_kernel<<<gridDim, blockDim>>>(
