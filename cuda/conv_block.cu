@@ -404,7 +404,7 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
 
     // Synchronize and check for errors
     cudaDeviceSynchronize();
-    err = cudaGetLastError();
+    cudaError_t err = cudaGetLastError();
     if (err != cudaSuccess) {
         printf("CUDA Error: %s\n", cudaGetErrorString(err));
         return;
