@@ -1,5 +1,6 @@
 #include "include/adam_optimizer.cuh"
 #include <stdexcept>
+#include <iostream> 
 
 // CUDA kernel for Adam update
 __global__ void adam_update_kernel(
