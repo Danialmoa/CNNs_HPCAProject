@@ -215,7 +215,12 @@ void ConvBlock::allocate_memory(int batch_size) {
     
     size_t conv_size = batch_size * out_channels * conv_output_height * conv_output_width;
     size_t input_size = batch_size * in_channels * input_height * input_width;
-    
+
+    if (d_conv_output_cache) cudaFree(d_conv_output_cache);
+    if (d_relu_output_cache) cudaFree(d_relu_output_cache);
+    if (d_pool_indices) cudaFree(d_pool_indices);
+    if (d_cache) cudaFree(d_cache);
+
     // Allocate memory for intermediate results
     CHECK_CUDA_ERROR(cudaMalloc(&d_conv_output_cache, conv_size * sizeof(float)));
     CHECK_CUDA_ERROR(cudaMalloc(&d_relu_output_cache, conv_size * sizeof(float)));
@@ -227,12 +232,30 @@ void ConvBlock::allocate_memory(int batch_size) {
 
 void ConvBlock::free_memory() {
     std::cout << "Freeing ConvBlock GPU memory" << std::endl;
-    if (d_weights) cudaFree(d_weights);
-    if (d_biases) cudaFree(d_biases);
-    if (d_cache) cudaFree(d_cache);
-    if (d_conv_output_cache) cudaFree(d_conv_output_cache);
-    if (d_relu_output_cache) cudaFree(d_relu_output_cache);
-    if (d_pool_indices) cudaFree(d_pool_indices);
+    if (d_weights) {
+        cudaFree(d_weights);
+        d_weights = nullptr;
+    }
+    if (d_biases) {
+        cudaFree(d_biases);
+        d_biases = nullptr;
+    }
+    if (d_cache) {
+        cudaFree(d_cache);
+        d_cache = nullptr;
+    }
+    if (d_conv_output_cache) {
+        cudaFree(d_conv_output_cache);
+        d_conv_output_cache = nullptr;
+    }
+    if (d_relu_output_cache) {
+        cudaFree(d_relu_output_cache);
+        d_relu_output_cache = nullptr;
+    }
+    if (d_pool_indices) {
+        cudaFree(d_pool_indices);
+        d_pool_indices = nullptr;
+    }
 }
 
 void ConvBlock::forward(const float* d_input, float* d_output, int batch_size, int height, int width) {
