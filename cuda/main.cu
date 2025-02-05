@@ -102,8 +102,20 @@ int main() {
 
             for (int batch = 0; batch < num_batches; ++batch) {
                 std::cout << "Batch " << batch << " of " << num_batches << std::endl;
+                cudaError_t cuda_status = cudaGetLastError();
+                if (cuda_status != cudaSuccess) {
+                    throw std::runtime_error("CUDA error before batch processing: " + 
+                                        std::string(cudaGetErrorString(cuda_status)));
+                }
                 // Get batch data
                 dataset.get_batch_data(d_batch_images, d_batch_labels, batch, batch_size);
+
+                cudaDeviceSynchronize();
+                cuda_status = cudaGetLastError();
+                if (cuda_status != cudaSuccess) {
+                    throw std::runtime_error("CUDA error after batch copy: " + 
+                                        std::string(cudaGetErrorString(cuda_status)));
+                }
 
                 // Forward pass
                 conv1.forward(d_batch_images, d_conv_output, batch_size, 32, 32);
