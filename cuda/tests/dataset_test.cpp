@@ -53,7 +53,7 @@ int main() {
         dataset.to_gpu();
 
         // Test batch retrieval
-        int batch_size = 32;
+        int batch_size = 50;
         int total_batches = dataset.get_num_batches(batch_size);
         float* d_batch_images;
         uint8_t* d_batch_labels;
