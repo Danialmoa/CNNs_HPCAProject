@@ -14,10 +14,10 @@ __global__ void conv_forward_kernel(
     int height, int width, int kernel_size, int stride, int padding,
     int output_height, int output_width) {
     
-    int b = blockIdx.x;
-    int oc = blockIdx.y;
-    int h = blockIdx.z / output_width;
-    int w = blockIdx.z % output_width;
+    int b = blockIdx.x; // Batch Index
+    int oc = blockIdx.y; // output channels
+    int h = blockIdx.z / output_width; // height
+    int w = blockIdx.z % output_width; // width
     
     if (b >= batch_size || oc >= out_channels || h >= output_height || w >= output_width) 
         return;
@@ -31,6 +31,7 @@ __global__ void conv_forward_kernel(
     }
     #endif
     
+    int print_tag = 0;
     for (int ic = 0; ic < in_channels; ic++) {
         for (int kh = 0; kh < kernel_size; kh++) {
             for (int kw = 0; kw < kernel_size; kw++) {
@@ -41,11 +42,13 @@ __global__ void conv_forward_kernel(
                     int input_idx = ((b * in_channels + ic) * height + ih) * width + iw;
                     int weight_idx = ((oc * in_channels + ic) * kernel_size + kh) * kernel_size + kw;
                     sum += input[input_idx] * weights[weight_idx];
+
                     
                     #ifdef DEBUG_PRINT
-                    if (b == 0 && oc == 0 && h == 0 && w == 0 && ic == 0 && kh == 0 && kw == 0) {
+                    if (print_tag == 0) {
                         printf("First multiplication: input[%d]=%f * weight[%d]=%f\n", 
                                input_idx, input[input_idx], weight_idx, weights[weight_idx]);
+                        print_tag = 1;
                     }
                     #endif
                 }
