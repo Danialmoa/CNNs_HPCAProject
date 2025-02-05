@@ -83,8 +83,8 @@ void DataSet::get_batch_data(float* d_batch_images, uint8_t* d_batch_labels,
     }
 
     // Calculate actual batch size (might be smaller for last batch)
-    int actual_batch_size = std::min(batch_size, 
-                                   NUM_IMAGES_TOTAL - batch_index * batch_size);
+    int remaining_images = NUM_IMAGES_TOTAL - batch_index * batch_size;
+    int actual_batch_size = std::min(batch_size, remaining_images);
 
     std::cout << "Actual batch size: " << actual_batch_size << std::endl;
 

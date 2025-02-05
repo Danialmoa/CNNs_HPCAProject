@@ -30,7 +30,7 @@ public:
                        int batch_index, int batch_size);
     
     int get_num_batches(int batch_size) const {
-        return NUM_IMAGES_TOTAL / batch_size;
+        return (NUM_IMAGES_TOTAL + batch_size - 1) / batch_size;
     }
     const std::vector<float>& get_images() const { return h_images; }
     const std::vector<uint8_t>& get_labels() const { return h_labels; }
