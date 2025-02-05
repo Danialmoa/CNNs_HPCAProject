@@ -297,6 +297,9 @@ void ConvBlock::forward(const float* d_input, float* d_output, int batch_size, i
     allocate_memory(batch_size);
 
     // Copy input to cache
+    size_t input_size = batch_size * in_channels * height * width * sizeof(float);
+    CHECK_CUDA_ERROR(cudaMemcpy(d_cache, d_input, input_size, cudaMemcpyDeviceToDevice));
+    
     dim3 gridDim(batch_size, 
                  out_channels, 
                  (conv_output_height * conv_output_width + 255) / 256);
