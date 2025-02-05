@@ -8,6 +8,7 @@ class ConvBlock {
 private:
     int in_channels, out_channels, kernel_size, stride, padding;
     int pool_size, pool_stride;
+    int current_batch_size;
     
     // Device pointers
     float *d_weights, *d_biases;
