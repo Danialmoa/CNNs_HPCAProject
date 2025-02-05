@@ -372,7 +372,24 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
     // Launch kernel
     dim3 gridDim(batch_size, out_channels, conv_output_height * conv_output_width);
     dim3 blockDim(256);
-    
+    std::cout << "Launching conv backward kernel with grid: " 
+              << gridDim.x << "x" << gridDim.y << "x" << gridDim.z 
+              << " block: " << blockDim.x << std::endl;
+    std::cout << "Batch size: " << batch_size << std::endl;
+    std::cout << "Out channels: " << out_channels << std::endl;
+    std::cout << "Conv output height: " << conv_output_height << std::endl;
+    std::cout << "Conv output width: " << conv_output_width << std::endl;
+    std::cout << "In channels: " << in_channels << std::endl;
+    std::cout << "Height: " << height << std::endl;
+    std::cout << "Width: " << width << std::endl;
+    std::cout << "Kernel size: " << kernel_size << std::endl;
+    std::cout << "Stride: " << stride << std::endl;
+    std::cout << "Padding: " << padding << std::endl;
+    std::cout << "Pool size: " << pool_size << std::endl;
+    std::cout << "Pool stride: " << pool_stride << std::endl;
+    std::cout << "Pool output height: " << pool_output_height << std::endl;
+    std::cout << "Pool output width: " << pool_output_width << std::endl;
+
     conv_backward_kernel<<<gridDim, blockDim>>>(
         d_grad_output, d_weights,
         d_grad_input, d_grad_weights, d_grad_biases,
@@ -381,7 +398,11 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
         input_height, input_width, kernel_size, stride, padding,
         conv_output_height, conv_output_width
     );
-    CHECK_LAST_CUDA_ERROR();
+    cudaError_t err = cudaGetLastError();
+    if (err != cudaSuccess) {
+        printf("CUDA Error: %s\n", cudaGetErrorString(err));
+        return;
+    }
     
     // Update weights and biases
     weights_optimizer.update(d_weights, d_grad_weights);
