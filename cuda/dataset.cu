@@ -86,6 +86,8 @@ void DataSet::get_batch_data(float* d_batch_images, uint8_t* d_batch_labels,
     int actual_batch_size = std::min(batch_size, 
                                    NUM_IMAGES_TOTAL - batch_index * batch_size);
 
+    std::cout << "Actual batch size: " << actual_batch_size << std::endl;
+
     // Copy batch data
     size_t image_copy_size = actual_batch_size * IMAGE_SIZE * sizeof(float);
     size_t label_copy_size = actual_batch_size * NUM_CLASSES * sizeof(uint8_t);
