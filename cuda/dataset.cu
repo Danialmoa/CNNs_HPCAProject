@@ -6,6 +6,9 @@
 DataSet::DataSet(const std::string& path) : data_path_root(path) {
     d_images = nullptr;
     d_labels = nullptr;
+
+    h_images.resize(NUM_IMAGES_TOTAL * IMAGE_SIZE);
+    h_labels.resize(NUM_IMAGES_TOTAL * NUM_CLASSES);
 }
 
 DataSet::~DataSet() {
