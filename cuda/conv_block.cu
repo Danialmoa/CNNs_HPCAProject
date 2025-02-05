@@ -357,52 +357,84 @@ void ConvBlock::forward(const float* d_input, float* d_output, int batch_size, i
         return;
     }
 }
-
 void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int batch_size) {
-    if (batch_size != current_batch_size) {
-        throw std::invalid_argument("Batch size mismatch between forward and backward passes");
+    // Validate inputs
+    if (d_grad_output == nullptr) {
+        throw std::invalid_argument("d_grad_output is null");
     }
+    if (d_grad_input == nullptr) {
+        throw std::invalid_argument("d_grad_input is null");
+    }
+    if (d_cache == nullptr) {
+        throw std::invalid_argument("d_cache (saved input) is null");
+    }
+    if (d_relu_output_cache == nullptr) {
+        throw std::invalid_argument("d_relu_output_cache is null");
+    }
+    
+    std::cout << "Starting backward pass with:" << std::endl
+              << "  batch_size: " << batch_size << std::endl
+              << "  input_height: " << input_height << std::endl
+              << "  input_width: " << input_width << std::endl
+              << "  conv_output_height: " << conv_output_height << std::endl
+              << "  conv_output_width: " << conv_output_width << std::endl;
     
     // Calculate sizes
     size_t weight_size = out_channels * in_channels * kernel_size * kernel_size;
     size_t bias_size = out_channels;
     size_t input_size = batch_size * in_channels * input_height * input_width;
-    size_t output_size = batch_size * out_channels * conv_output_height * conv_output_width;
-    
-    std::cout << "Backward pass dimensions:" << std::endl
-              << "  input_size: " << input_size << std::endl
-              << "  weight_size: " << weight_size << std::endl
-              << "  output_size: " << output_size << std::endl;
+    size_t conv_output_size = batch_size * out_channels * conv_output_height * conv_output_width;
     
     // Allocate gradients
-    float *d_grad_weights, *d_grad_biases;
-    CHECK_CUDA_ERROR(cudaMalloc(&d_grad_weights, weight_size * sizeof(float)));
-    CHECK_CUDA_ERROR(cudaMalloc(&d_grad_biases, bias_size * sizeof(float)));
+    float *d_grad_weights = nullptr;
+    float *d_grad_biases = nullptr;
     
-    // Zero out gradients
-    CHECK_CUDA_ERROR(cudaMemset(d_grad_weights, 0, weight_size * sizeof(float)));
-    CHECK_CUDA_ERROR(cudaMemset(d_grad_biases, 0, bias_size * sizeof(float)));
-    CHECK_CUDA_ERROR(cudaMemset(d_grad_input, 0, input_size * sizeof(float)));
-    
-    // Launch kernel
-    dim3 gridDim(batch_size, out_channels, conv_output_height * conv_output_width);
-    dim3 blockDim(256);
-    
-    conv_backward_kernel<<<gridDim, blockDim>>>(
-        d_grad_output, d_weights,
-        d_grad_input, d_grad_weights, d_grad_biases,
-        d_cache, d_relu_output_cache,
-        batch_size, in_channels, out_channels,
-        input_height, input_width, kernel_size, stride, padding,
-        conv_output_height, conv_output_width
-    );
-    CHECK_LAST_CUDA_ERROR();
-    
-    // Update weights and biases
-    weights_optimizer.update(d_weights, d_grad_weights);
-    bias_optimizer.update(d_biases, d_grad_biases);
+    try {
+        CHECK_CUDA_ERROR(cudaMalloc(&d_grad_weights, weight_size * sizeof(float)));
+        CHECK_CUDA_ERROR(cudaMalloc(&d_grad_biases, bias_size * sizeof(float)));
+        
+        // Zero out gradients
+        CHECK_CUDA_ERROR(cudaMemset(d_grad_weights, 0, weight_size * sizeof(float)));
+        CHECK_CUDA_ERROR(cudaMemset(d_grad_biases, 0, bias_size * sizeof(float)));
+        CHECK_CUDA_ERROR(cudaMemset(d_grad_input, 0, input_size * sizeof(float)));
+        
+        // Calculate grid dimensions
+        int total_output_elements = conv_output_height * conv_output_width;
+        dim3 gridDim(batch_size, out_channels, (total_output_elements + 255) / 256);
+        dim3 blockDim(256);
+        
+        std::cout << "Launching backward kernel with:" << std::endl
+                  << "  Grid: " << gridDim.x << "x" << gridDim.y << "x" << gridDim.z << std::endl
+                  << "  Block: " << blockDim.x << std::endl;
+        
+        // Launch kernel
+        conv_backward_kernel<<<gridDim, blockDim>>>(
+            d_grad_output, d_weights,
+            d_grad_input, d_grad_weights, d_grad_biases,
+            d_cache, d_relu_output_cache,
+            batch_size, in_channels, out_channels,
+            input_height, input_width, kernel_size, stride, padding,
+            conv_output_height, conv_output_width
+        );
+        
+        // Check for kernel launch errors
+        CHECK_LAST_CUDA_ERROR();
+        
+        // Synchronize and check for errors
+        CHECK_CUDA_ERROR(cudaDeviceSynchronize());
+        
+        // Update weights and biases
+        weights_optimizer.update(d_weights, d_grad_weights);
+        bias_optimizer.update(d_biases, d_grad_biases);
+        
+    } catch (const std::exception& e) {
+        // Cleanup on error
+        if (d_grad_weights) cudaFree(d_grad_weights);
+        if (d_grad_biases) cudaFree(d_grad_biases);
+        throw;
+    }
     
     // Cleanup
-    CHECK_CUDA_ERROR(cudaFree(d_grad_weights));
-    CHECK_CUDA_ERROR(cudaFree(d_grad_biases));
+    if (d_grad_weights) cudaFree(d_grad_weights);
+    if (d_grad_biases) cudaFree(d_grad_biases);
 }
