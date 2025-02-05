@@ -48,6 +48,7 @@ __global__ void conv_forward_kernel(
                     if (print_tag == 0) {
                         printf("First multiplication: input[%d]=%f * weight[%d]=%f\n", 
                                input_idx, input[input_idx], weight_idx, weights[weight_idx]);
+                        printf("Sum: %f\n", sum);
                         print_tag = 1;
                     }
                     #endif
