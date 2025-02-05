@@ -17,6 +17,7 @@ DataSet::~DataSet() {
 }
 
 void DataSet::load_data() {
+    int total_images_loaded = 0;
     for (int batch = 1; batch <= 5; batch++) {
         std::string data_path = data_path_root + "/data_batch_" + std::to_string(batch) + ".bin";
         std::ifstream file(data_path, std::ios::binary);
@@ -49,12 +50,13 @@ void DataSet::load_data() {
                 float pixel_value = static_cast<float>(temp_buffer[j]) / 255.0f;
                 h_images[img_idx * IMAGE_SIZE + j] = pixel_value;
             }
+            total_images_loaded++;
         }
         
         file.close();
     }
 
-    std::cout << "Loaded " << NUM_IMAGES_TOTAL << " images successfully." << std::endl;
+    std::cout << "Loaded " << total_images_loaded << " images successfully." << std::endl;
 }
 
 void DataSet::to_gpu() {
