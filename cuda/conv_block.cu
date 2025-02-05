@@ -319,6 +319,7 @@ void ConvBlock::forward(const float* d_input, float* d_output, int batch_size, i
     std::cout << "Input height: " << height << std::endl;
     std::cout << "Input width: " << width << std::endl;
 
+
     max_pool_forward_kernel<<<gridDimPooling, blockDimPooling>>>(
         d_relu_output_cache,
         d_output,
@@ -370,8 +371,10 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
     CHECK_CUDA_ERROR(cudaMemset(d_grad_input, 0, input_size * sizeof(float)));
     
     // Launch kernel
-    dim3 gridDim(batch_size, out_channels, conv_output_height * conv_output_width);
+    int total_spatial_elements = conv_output_height * conv_output_width;
+    dim3 gridDim(batch_size, out_channels, (total_spatial_elements + 255) / 256);
     dim3 blockDim(256);
+
     std::cout << "Launching conv backward kernel with grid: " 
               << gridDim.x << "x" << gridDim.y << "x" << gridDim.z 
               << " block: " << blockDim.x << std::endl;
@@ -396,11 +399,6 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
         input_height, input_width, kernel_size, stride, padding,
         conv_output_height, conv_output_width
     );
-    CHECK_LAST_CUDA_ERROR();
-    
-    std::cout << "Launching conv backward kernel with grid: " 
-              << gridDim.x << "x" << gridDim.y << "x" << gridDim.z 
-              << " block: " << blockDim.x << std::endl;
 
     // Synchronize and check for errors
     cudaDeviceSynchronize();
