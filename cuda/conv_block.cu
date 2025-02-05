@@ -304,7 +304,6 @@ void ConvBlock::forward(const float* d_input, float* d_output, int batch_size, i
                  (conv_output_height * conv_output_width + 255) / 256);
     dim3 blockDim(256);
 
-    std::cout << "\nLaunching kernel..." << std::endl;
     conv_forward_kernel<<<gridDim, blockDim>>>(
         d_cache,
         d_weights,

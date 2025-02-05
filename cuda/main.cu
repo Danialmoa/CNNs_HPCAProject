@@ -73,7 +73,8 @@ int main() {
         dataset.load_data();
         dataset.to_gpu();
         const int num_batches = dataset.get_num_batches(batch_size);
-
+        std::cout << "Number of batches: " << num_batches << std::endl;
+        
         // Create network layers
         std::cout << "Creating network..." << std::endl;
         ConvBlock conv1(3, 32, 3, 1, 1, 2, 2, learning_rate);  // input: 32x32x3, output: 16x16x32
