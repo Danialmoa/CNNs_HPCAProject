@@ -64,8 +64,7 @@ int main() {
         std::cout << "\nTesting batches (total batches: " << total_batches << ")..." << std::endl;
         
         // Test first few batches
-        int batches_to_test = std::min(5, total_batches);
-        for (int batch_idx = 0; batch_idx < batches_to_test; batch_idx++) {
+        for (int batch_idx = 0; batch_idx < total_batches; batch_idx++) {
             std::cout << "\nProcessing batch " << batch_idx << "/" << (total_batches - 1) 
                       << " (" << (batch_idx * 100.0f / total_batches) << "%)" << std::endl;
             
