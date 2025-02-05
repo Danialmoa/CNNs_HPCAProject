@@ -380,8 +380,6 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
     std::cout << "Conv output height: " << conv_output_height << std::endl;
     std::cout << "Conv output width: " << conv_output_width << std::endl;
     std::cout << "In channels: " << in_channels << std::endl;
-    std::cout << "Height: " << height << std::endl;
-    std::cout << "Width: " << width << std::endl;
     std::cout << "Kernel size: " << kernel_size << std::endl;
     std::cout << "Stride: " << stride << std::endl;
     std::cout << "Padding: " << padding << std::endl;
