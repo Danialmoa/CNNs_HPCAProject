@@ -73,7 +73,6 @@ void AdamOptimizer::init(size_t num_params) {
 int getOptimalBlockSize() {
     int maxThreads;
     cudaDeviceGetAttribute(&maxThreads, cudaDevAttrMaxThreadsPerBlock, 0);
-    std::cout << "Max threads per block: " << maxThreads << std::endl;
     return std::min(256, maxThreads);
 }
 

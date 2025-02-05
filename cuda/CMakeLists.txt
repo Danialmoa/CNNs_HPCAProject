@@ -4,7 +4,7 @@ project(SimpleNeuralNetworkGPU CUDA CXX)
 # Force CUDA compiler to use older toolchain
 set(CMAKE_CUDA_COMPILER_TOOLKIT_VERSION "11.0")
 set(CMAKE_CUDA_ARCHITECTURES 70)  # Using a more compatible architecture
-set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --ptxas-options=-v -arch=sm_70")
+set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --ptxas-options=-v -arch=sm_75")
 
 find_package(CUDA REQUIRED)
 

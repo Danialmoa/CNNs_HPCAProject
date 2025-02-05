@@ -25,7 +25,7 @@ __global__ void conv_forward_kernel(
     float sum = biases[oc];
     
     #ifdef DEBUG_PRINT
-    if (b == 0 && oc == 0 && h == 0 && w == 0) {
+    if (b == 0 && oc == 0 && h == 0 && w == 0 && threadIdx.x == 0) {
         printf("Conv Forward - First element computation:\n");
         printf("Bias: %f\n", biases[oc]);
     }
@@ -297,16 +297,12 @@ void ConvBlock::forward(const float* d_input, float* d_output, int batch_size, i
     allocate_memory(batch_size);
 
     // Copy input to cache
-    size_t input_size = batch_size * in_channels * input_height * input_width;
-    cudaMemcpy(d_cache, d_input, input_size * sizeof(float), cudaMemcpyDeviceToDevice);
+    dim3 gridDim(batch_size, 
+                 out_channels, 
+                 (conv_output_height * conv_output_width + 255) / 256);
+    dim3 blockDim(256);
     
-    // Very basic kernel launch configuration
-    int threadsPerBlock = 256;
-    int totalElements = batch_size * out_channels * conv_output_height * conv_output_width;
-    int blocksPerGrid = (totalElements + threadsPerBlock - 1) / threadsPerBlock;
-    
-    // Launch convolution kernel
-    conv_forward_kernel<<<blocksPerGrid, threadsPerBlock>>>(
+    conv_forward_kernel<<<gridDim, blockDim>>>(
         d_cache,
         d_weights,
         d_biases,
@@ -323,6 +319,7 @@ void ConvBlock::forward(const float* d_input, float* d_output, int batch_size, i
         conv_output_height,
         conv_output_width
     );
+    CHECK_LAST_CUDA_ERROR();
     
     // Synchronize and check for errors
     cudaDeviceSynchronize();
@@ -331,12 +328,14 @@ void ConvBlock::forward(const float* d_input, float* d_output, int batch_size, i
         printf("CUDA Error: %s\n", cudaGetErrorString(err));
         return;
     }
+
+    dim3 gridDim(batch_size, 
+                 out_channels, 
+                 (pool_output_height * pool_output_width + 255) / 256);
+    dim3 blockDim(256);
     
-    // Launch pooling kernel
-    totalElements = batch_size * out_channels * pool_output_height * pool_output_width;
-    blocksPerGrid = (totalElements + threadsPerBlock - 1) / threadsPerBlock;
-    
-    max_pool_forward_kernel<<<blocksPerGrid, threadsPerBlock>>>(
+    // Launch Pooling kernel
+    max_pool_forward_kernel<<<gridDim, blockDim>>>(
         d_relu_output_cache,
         d_output,
         d_pool_indices,
@@ -349,6 +348,7 @@ void ConvBlock::forward(const float* d_input, float* d_output, int batch_size, i
         pool_output_height,
         pool_output_width
     );
+    CHECK_LAST_CUDA_ERROR();
     
     // Synchronize and check for errors
     cudaDeviceSynchronize();
@@ -376,14 +376,12 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
         batch_size * in_channels * input_height * input_width * sizeof(float)));
     
     // Simplified kernel launch configuration
-    const int THREADS_PER_BLOCK = 256;
-    int total_elements = batch_size * out_channels * conv_output_height * conv_output_width;
-    int num_blocks = (total_elements + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
+    dim3 gridDim(batch_size, 
+                 out_channels, 
+                 (conv_output_height * conv_output_width + 255) / 256);
+    dim3 blockDim(256);
     
-    std::cout << "Launching conv_backward_kernel with " << num_blocks 
-              << " blocks, " << THREADS_PER_BLOCK << " threads per block" << std::endl;
-    
-    conv_backward_kernel<<<num_blocks, THREADS_PER_BLOCK>>>(
+    conv_backward_kernel<<<gridDim, blockDim>>>(
         d_grad_output, d_weights,
         d_grad_input, d_grad_weights, d_grad_biases,
         d_cache, d_relu_output_cache,
