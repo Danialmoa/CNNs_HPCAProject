@@ -202,7 +202,15 @@ ConvBlock::~ConvBlock() {
 }
 
 void ConvBlock::allocate_memory(int batch_size) {
-    free_memory();
+    if (d_conv_output_cache) cudaFree(d_conv_output_cache);
+    if (d_relu_output_cache) cudaFree(d_relu_output_cache);
+    if (d_pool_indices) cudaFree(d_pool_indices);
+    if (d_cache) cudaFree(d_cache);
+    d_cache = nullptr;
+    d_conv_output_cache = nullptr;
+    d_relu_output_cache = nullptr;
+    d_pool_indices = nullptr;
+    
     // Calculate output dimensions
     conv_output_height = (input_height + 2 * padding - kernel_size) / stride + 1;
     conv_output_width = (input_width + 2 * padding - kernel_size) / stride + 1;
@@ -216,10 +224,7 @@ void ConvBlock::allocate_memory(int batch_size) {
     size_t conv_size = batch_size * out_channels * conv_output_height * conv_output_width;
     size_t input_size = batch_size * in_channels * input_height * input_width;
 
-    if (d_conv_output_cache) cudaFree(d_conv_output_cache);
-    if (d_relu_output_cache) cudaFree(d_relu_output_cache);
-    if (d_pool_indices) cudaFree(d_pool_indices);
-    if (d_cache) cudaFree(d_cache);
+    
 
     // Allocate memory for intermediate results
     CHECK_CUDA_ERROR(cudaMalloc(&d_conv_output_cache, conv_size * sizeof(float)));
