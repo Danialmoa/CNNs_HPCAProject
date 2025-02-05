@@ -58,6 +58,14 @@ void DataSet::load_data() {
 }
 
 void DataSet::to_gpu() {
+    if (d_images) {
+        CHECK_CUDA_ERROR(cudaFree(d_images));
+        d_images = nullptr;
+    }
+    if (d_labels) {
+        CHECK_CUDA_ERROR(cudaFree(d_labels));
+        d_labels = nullptr;
+    }
     CHECK_CUDA_ERROR(cudaMalloc(&d_images, NUM_IMAGES_TOTAL * IMAGE_SIZE * sizeof(float)));
     CHECK_CUDA_ERROR(cudaMalloc(&d_labels, NUM_IMAGES_TOTAL * NUM_CLASSES * sizeof(uint8_t)));
 
@@ -85,8 +93,6 @@ void DataSet::get_batch_data(float* d_batch_images, uint8_t* d_batch_labels,
     // Calculate actual batch size (might be smaller for last batch)
     int remaining_images = NUM_IMAGES_TOTAL - batch_index * batch_size;
     int actual_batch_size = std::min(batch_size, remaining_images);
-
-    std::cout << "Actual batch size: " << actual_batch_size << std::endl;
 
     // Copy batch data
     size_t image_copy_size = actual_batch_size * IMAGE_SIZE * sizeof(float);
