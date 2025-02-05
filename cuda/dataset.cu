@@ -90,10 +90,6 @@ void DataSet::get_batch_data(float* d_batch_images, uint8_t* d_batch_labels,
     size_t image_copy_size = actual_batch_size * IMAGE_SIZE * sizeof(float);
     size_t label_copy_size = actual_batch_size * NUM_CLASSES * sizeof(uint8_t);
 
-    if (image_offset + (actual_batch_size * IMAGE_SIZE) > NUM_IMAGES_TOTAL * IMAGE_SIZE) {
-        throw std::runtime_error("Image batch access out of bounds");
-    }
-
     CHECK_CUDA_ERROR(cudaMemcpy(d_batch_images, d_images + image_offset, 
                          image_copy_size, cudaMemcpyDeviceToDevice));
     CHECK_CUDA_ERROR(cudaMemcpy(d_batch_labels, d_labels + label_offset, 

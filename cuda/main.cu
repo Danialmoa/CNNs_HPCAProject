@@ -101,6 +101,7 @@ int main() {
             auto epoch_start = std::chrono::high_resolution_clock::now();
 
             for (int batch = 0; batch < num_batches; ++batch) {
+                std::cout << "Batch " << batch << " of " << num_batches << std::endl;
                 // Get batch data
                 dataset.get_batch_data(d_batch_images, d_batch_labels, batch, batch_size);
 
