@@ -329,13 +329,13 @@ void ConvBlock::forward(const float* d_input, float* d_output, int batch_size, i
         return;
     }
 
-    dim3 gridDim(batch_size, 
+    dim3 gridDimPooling(batch_size, 
                  out_channels, 
                  (pool_output_height * pool_output_width + 255) / 256);
-    dim3 blockDim(256);
+    dim3 blockDimPooling(256);
     
     // Launch Pooling kernel
-    max_pool_forward_kernel<<<gridDim, blockDim>>>(
+    max_pool_forward_kernel<<<gridDimPooling, blockDimPooling>>>(
         d_relu_output_cache,
         d_output,
         d_pool_indices,
