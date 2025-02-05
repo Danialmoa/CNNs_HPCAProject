@@ -23,14 +23,7 @@ __global__ void conv_forward_kernel(
         return;
     
     float sum = biases[oc];
-    
-    #ifdef DEBUG_PRINT
-    if (b == 0 && oc == 0 && h == 0 && w == 0 && threadIdx.x == 0) {
-        printf("Conv Forward - First element computation:\n");
-        printf("Bias: %f\n", biases[oc]);
-    }
-    #endif
-    
+
     for (int ic = 0; ic < in_channels; ic++) {
         for (int kh = 0; kh < kernel_size; kh++) {
             for (int kw = 0; kw < kernel_size; kw++) {
@@ -69,12 +62,6 @@ __global__ void max_pool_forward_kernel(
     float max_val = -INFINITY;
     int max_idx = -1;
     
-    #ifdef DEBUG_PRINT
-    if (b == 0 && c == 0 && h == 0 && w == 0) {
-        printf("MaxPool Forward - Processing first window:\n");
-    }
-    #endif
-    
     for (int ph = 0; ph < pool_size; ph++) {
         for (int pw = 0; pw < pool_size; pw++) {
             int ih = h * pool_stride + ph;
@@ -94,12 +81,6 @@ __global__ void max_pool_forward_kernel(
     int output_idx = ((b * channels + c) * output_height + h) * output_width + w;
     output[output_idx] = max_val;
     pool_indices[output_idx] = max_idx;
-    
-    #ifdef DEBUG_PRINT
-    if (b == 0 && c == 0 && h == 0 && w == 0) {
-        printf("First pool output: val=%f, index=%d\n", max_val, max_idx);
-    }
-    #endif
 }
 
 __global__ void conv_backward_kernel(
@@ -130,21 +111,11 @@ __global__ void conv_backward_kernel(
     // ReLU backward
     if (relu_output[output_idx] <= 0) {
         grad = 0;
-        #ifdef DEBUG_PRINT
-        if (b == 0 && oc == 0 && h == 0 && w == 0) {
-            printf("ReLU backward: gradient zeroed\n");
-        }
-        #endif
     }
     
     // Bias gradient
     atomicAdd(&grad_biases[oc], grad);
     
-    #ifdef DEBUG_PRINT
-    if (b == 0 && oc == 0 && h == 0 && w == 0) {
-        printf("Updated bias gradient for channel %d\n", oc);
-    }
-    #endif
     
     // Weight and input gradients
     for (int ic = 0; ic < in_channels; ic++) {
@@ -159,14 +130,6 @@ __global__ void conv_backward_kernel(
                     
                     atomicAdd(&grad_weights[weight_idx], input[input_idx] * grad);
                     atomicAdd(&grad_input[input_idx], weights[weight_idx] * grad);
-                    
-                    #ifdef DEBUG_PRINT
-                    if (b == 0 && oc == 0 && ic == 0 && kh == 0 && kw == 0) {
-                        printf("First gradient update: weight[%d]+=(%f*%f), input[%d]+=(%f*%f)\n",
-                               weight_idx, input[input_idx], grad,
-                               input_idx, weights[weight_idx], grad);
-                    }
-                    #endif
                 }
             }
         }
@@ -289,7 +252,26 @@ void ConvBlock::forward(const float* d_input, float* d_output, int batch_size, i
                  out_channels, 
                  (conv_output_height * conv_output_width + 255) / 256);
     dim3 blockDim(256);
-    
+
+    std::cout << "Launching conv forward kernel with grid: " 
+              << gridDim.x << "x" << gridDim.y << "x" << gridDim.z 
+              << " block: " << blockDim.x << std::endl;
+
+    std::cout << "Batch size: " << batch_size << std::endl;
+    std::cout << "Out channels: " << out_channels << std::endl;
+    std::cout << "Conv output height: " << conv_output_height << std::endl;
+    std::cout << "Conv output width: " << conv_output_width << std::endl;
+    std::cout << "In channels: " << in_channels << std::endl;
+    std::cout << "Height: " << height << std::endl;
+    std::cout << "Width: " << width << std::endl;
+    std::cout << "Kernel size: " << kernel_size << std::endl;
+    std::cout << "Stride: " << stride << std::endl;
+    std::cout << "Padding: " << padding << std::endl;
+    std::cout << "Pool size: " << pool_size << std::endl;
+    std::cout << "Pool stride: " << pool_stride << std::endl;
+    std::cout << "Pool output height: " << pool_output_height << std::endl;
+    std::cout << "Pool output width: " << pool_output_width << std::endl;
+
     conv_forward_kernel<<<gridDim, blockDim>>>(
         d_cache,
         d_weights,
@@ -323,6 +305,20 @@ void ConvBlock::forward(const float* d_input, float* d_output, int batch_size, i
     dim3 blockDimPooling(256);
     
     // Launch Pooling kernel
+    std::cout << "Launching max pooling kernel with grid: " 
+              << gridDimPooling.x << "x" << gridDimPooling.y << "x" << gridDimPooling.z 
+              << " block: " << blockDimPooling.x << std::endl;
+    std::cout << "Batch size: " << batch_size << std::endl;
+    std::cout << "Out channels: " << out_channels << std::endl;
+    std::cout << "Conv output height: " << conv_output_height << std::endl;
+    std::cout << "Conv output width: " << conv_output_width << std::endl;
+    std::cout << "Pool size: " << pool_size << std::endl;
+    std::cout << "Pool stride: " << pool_stride << std::endl;
+    std::cout << "Pool output height: " << pool_output_height << std::endl;
+    std::cout << "Pool output width: " << pool_output_width << std::endl;
+    std::cout << "Input height: " << height << std::endl;
+    std::cout << "Input width: " << width << std::endl;
+
     max_pool_forward_kernel<<<gridDimPooling, blockDimPooling>>>(
         d_relu_output_cache,
         d_output,
