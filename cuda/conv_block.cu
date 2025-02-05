@@ -31,7 +31,6 @@ __global__ void conv_forward_kernel(
     }
     #endif
     
-    int print_tag = 0;
     for (int ic = 0; ic < in_channels; ic++) {
         for (int kh = 0; kh < kernel_size; kh++) {
             for (int kw = 0; kw < kernel_size; kw++) {
@@ -43,15 +42,6 @@ __global__ void conv_forward_kernel(
                     int weight_idx = ((oc * in_channels + ic) * kernel_size + kh) * kernel_size + kw;
                     sum += input[input_idx] * weights[weight_idx];
 
-                    
-                    #ifdef DEBUG_PRINT
-                    if (print_tag == 0) {
-                        printf("First multiplication: input[%d]=%f * weight[%d]=%f\n", 
-                               input_idx, input[input_idx], weight_idx, weights[weight_idx]);
-                        printf("Sum: %f\n", sum);
-                        print_tag = 1;
-                    }
-                    #endif
                 }
             }
         }
@@ -68,10 +58,10 @@ __global__ void max_pool_forward_kernel(
     int pool_size, int pool_stride,
     int output_height, int output_width) {
     
-    int b = blockIdx.x;
-    int c = blockIdx.y;
-    int h = (blockIdx.z * blockDim.x + threadIdx.x) / output_width;
-    int w = (blockIdx.z * blockDim.x + threadIdx.x) % output_width;
+    int b = blockIdx.x; // batch index
+    int c = blockIdx.y; // channels
+    int h = (blockIdx.z * blockDim.x + threadIdx.x) / output_width; // height
+    int w = (blockIdx.z * blockDim.x + threadIdx.x) % output_width; // width
     
     if (b >= batch_size || c >= channels || h >= output_height || w >= output_width) 
         return;
@@ -96,12 +86,6 @@ __global__ void max_pool_forward_kernel(
                 if (val > max_val) {
                     max_val = val;
                     max_idx = idx;
-                    
-                    #ifdef DEBUG_PRINT
-                    if (b == 0 && c == 0 && h == 0 && w == 0) {
-                        printf("New max found: val=%f at idx=%d\n", val, idx);
-                    }
-                    #endif
                 }
             }
         }
