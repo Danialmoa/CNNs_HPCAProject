@@ -90,10 +90,6 @@ void DataSet::get_batch_data(float* d_batch_images, uint8_t* d_batch_labels,
     size_t image_copy_size = actual_batch_size * IMAGE_SIZE * sizeof(float);
     size_t label_copy_size = actual_batch_size * NUM_CLASSES * sizeof(uint8_t);
 
-    std::cout << "Copying batch " << batch_index << " with size " << actual_batch_size << ":" << std::endl;
-    std::cout << "Image offset: " << image_offset << ", Copy size: " << image_copy_size << " bytes" << std::endl;
-    std::cout << "Label offset: " << label_offset << ", Copy size: " << label_copy_size << " bytes" << std::endl;
-
     CHECK_CUDA_ERROR(cudaMemcpy(d_batch_images, d_images + image_offset, 
                          image_copy_size, cudaMemcpyDeviceToDevice));
     CHECK_CUDA_ERROR(cudaMemcpy(d_batch_labels, d_labels + label_offset, 
