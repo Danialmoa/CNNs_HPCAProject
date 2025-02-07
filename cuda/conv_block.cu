@@ -174,6 +174,34 @@ __global__ void conv_backward_kernel(
     }
 }
 
+__global__ void max_pool_backward_kernel(
+    const float* grad_output,     // Gradient from next layer
+    float* grad_input,            // Gradient to previous layer
+    const int* pool_indices,      // Saved max indices from forward pass
+    int batch_size,
+    int channels,
+    int input_height,            // Conv output height
+    int input_width,             // Conv output width
+    int output_height,           // Pooled output height
+    int output_width             // Pooled output width
+) {
+    // Calculate position
+    int b = blockIdx.x;                                    // Batch index
+    int c = blockIdx.y;                                    // Channel
+    int idx = blockIdx.z * blockDim.x + threadIdx.x;
+    int h = idx / output_width;                           // Output height position
+    int w = idx % output_width;                           // Output width position
+    
+    if (b >= batch_size || c >= channels || h >= output_height || w >= output_width) 
+        return;
+        
+    int output_idx = ((b * channels + c) * output_height + h) * output_width + w;
+    int input_idx = pool_indices[output_idx];
+    
+    // Propagate gradient to max element's position
+    atomicAdd(&grad_input[input_idx], grad_output[output_idx]);
+}
+
 // Constructor initializes layer parameters and allocates GPU memory
 ConvBlock::ConvBlock(int in_channels, int out_channels, int kernel_size, 
                      int stride, int padding, int pool_size, int pool_stride, 
@@ -384,6 +412,30 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
     CHECK_CUDA_ERROR(cudaMemset(d_grad_weights, 0, weight_size * sizeof(float)));
     CHECK_CUDA_ERROR(cudaMemset(d_grad_biases, 0, bias_size * sizeof(float)));
     CHECK_CUDA_ERROR(cudaMemset(d_grad_input, 0, input_size * sizeof(float)));
+
+    float* d_unpooled_grad;
+    size_t conv_output_size = batch_size * out_channels * conv_output_height * conv_output_width;
+    CHECK_CUDA_ERROR(cudaMalloc(&d_unpooled_grad, conv_output_size * sizeof(float)));
+    CHECK_CUDA_ERROR(cudaMemset(d_unpooled_grad, 0, conv_output_size * sizeof(float)));
+    
+    dim3 gridDimPool(batch_size, 
+                    out_channels, 
+                    (pool_output_height * pool_output_width + 255) / 256);
+    dim3 blockDimPool(256);
+    
+    max_pool_backward_kernel<<<gridDimPool, blockDimPool>>>(
+        d_grad_output,
+        d_unpooled_grad,
+        d_pool_indices,
+        batch_size,
+        out_channels,
+        conv_output_height,
+        conv_output_width,
+        pool_output_height,
+        pool_output_width
+    );
+    CHECK_LAST_CUDA_ERROR();
+ 
     
     // Launch backward kernel
     int total_spatial_elements = conv_output_height * conv_output_width;
@@ -414,4 +466,5 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
     // Free temporary buffers
     CHECK_CUDA_ERROR(cudaFree(d_grad_weights));
     CHECK_CUDA_ERROR(cudaFree(d_grad_biases));
+    CHECK_CUDA_ERROR(cudaFree(d_unpooled_grad));
 }
