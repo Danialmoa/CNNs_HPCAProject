@@ -23,6 +23,7 @@ __global__ void conv_forward_kernel(
     int output_height,
     int output_width) {
     
+    
     // Calculate output position
     int b = blockIdx.x;                                    // Batch index
     int oc = blockIdx.y;                                   // Output channel
@@ -416,7 +417,6 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
     size_t weight_size = out_channels * in_channels * kernel_size * kernel_size;
     size_t bias_size = out_channels;
     size_t input_size = batch_size * in_channels * input_height * input_width;
-    size_t output_size = batch_size * out_channels * conv_output_height * conv_output_width;
  
     // Allocate temporary gradient buffers
     float *d_grad_weights, *d_grad_biases;
