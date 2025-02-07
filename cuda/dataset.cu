@@ -106,7 +106,7 @@ void DataSet::get_batch_data(float* d_batch_images, uint8_t* d_batch_labels,
                          label_copy_size, cudaMemcpyDeviceToDevice));
 
     // Additional bounds checking
-    if (image_offset + image_copy_size > num_images * elements_per_image * sizeof(float)) {
+    if (image_offset + image_copy_size > NUM_IMAGES_TOTAL * IMAGE_SIZE * sizeof(float)) {
         std::cerr << "Memory access would be out of bounds!" << std::endl;
         throw std::runtime_error("Image memory access would exceed allocated memory");
     }
