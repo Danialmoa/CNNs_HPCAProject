@@ -5,6 +5,9 @@
 #include <iostream>
 
 
+#define TILE_SIZE 16
+#define BLOCK_SIZE 16
+
 // Performs forward convolution, applies ReLU activation
 __global__ void conv_forward_kernel(
     const float* input,           // Input tensor [batch_size, in_channels, height, width]
