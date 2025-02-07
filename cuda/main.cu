@@ -94,7 +94,7 @@ int main() {
 
 
         // Training hyperparameters
-        const int batch_size = 100;
+        const int batch_size = 64;
         const int num_epochs = 10;
         const float learning_rate = 0.001f;
         
