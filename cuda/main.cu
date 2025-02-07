@@ -37,6 +37,7 @@ __global__ void calculate_accuracy_kernel(
     int* correct_predictions, int batch_size, int num_classes) {
     
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx >= batch_size) return;
 
     float max_val = predictions[idx * num_classes];
@@ -53,6 +54,7 @@ __global__ void calculate_accuracy_kernel(
 
     // Find true class
     int true_class = -1;
+    int true_class = -1;
     for (int i = 0; i < num_classes; i++) {
         if (labels[idx * num_classes + i] == 1) {
             true_class = i;
@@ -60,6 +62,7 @@ __global__ void calculate_accuracy_kernel(
         }
     }
 
+    if (true_class != -1 && pred_class == true_class) {
     if (true_class != -1 && pred_class == true_class) {
         atomicAdd(correct_predictions, 1);
     }
@@ -76,9 +79,14 @@ float calculate_accuracy(const float* d_predictions, const uint8_t* d_labels, in
     int numBlocks = (batch_size + threadsPerBlock - 1) / threadsPerBlock;
     
     calculate_accuracy_kernel<<<numBlocks, threadsPerBlock>>>(
+    int threadsPerBlock = 256;
+    int numBlocks = (batch_size + threadsPerBlock - 1) / threadsPerBlock;
+    
+    calculate_accuracy_kernel<<<numBlocks, threadsPerBlock>>>(
         d_predictions, d_labels, d_correct, batch_size, 10
     );
     CHECK_LAST_CUDA_ERROR();
+    CHECK_CUDA_ERROR(cudaDeviceSynchronize());
     CHECK_CUDA_ERROR(cudaDeviceSynchronize());
 
     CHECK_CUDA_ERROR(cudaMemcpy(&h_correct, d_correct, sizeof(int), cudaMemcpyDeviceToHost));
@@ -151,6 +159,7 @@ int main() {
                 // Get batch data
                 dataset.get_batch_data(d_batch_images, d_batch_labels, batch, batch_size);
 
+
                 // Forward pass
                 conv1.forward(d_batch_images, d_conv_output, batch_size, 32, 32);
                 fc.forward(d_conv_output, d_fc_output, batch_size);
@@ -164,6 +173,7 @@ int main() {
 
                 std::cout << "Batch loss: " << batch_loss << std::endl;
                 std::cout << "Batch accuracy: " << batch_accuracy << std::endl;
+                
                 
                 // Backward pass
                 fc.backward(d_batch_labels, d_grad_conv_output, batch_size);
