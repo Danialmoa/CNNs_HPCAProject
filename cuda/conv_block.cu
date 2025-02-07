@@ -147,7 +147,7 @@ __global__ void conv_backward_kernel(
     float grad = grad_output[output_idx] / static_cast<float>(batch_size);
     
     // ReLU backward pass - zero out gradient where input was negative
-    if (conv_output[output_idx] <= 0) {
+    if (relu_output[output_idx] <= 0) {
         grad = 0;
     }
     
