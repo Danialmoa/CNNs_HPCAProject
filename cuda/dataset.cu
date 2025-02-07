@@ -105,5 +105,39 @@ void DataSet::get_batch_data(float* d_batch_images, uint8_t* d_batch_labels,
     CHECK_CUDA_ERROR(cudaMemcpy(d_batch_labels, d_labels + label_offset, 
                          label_copy_size, cudaMemcpyDeviceToDevice));
 
+    // Additional bounds checking
+    if (image_offset + image_copy_size > num_images * elements_per_image * sizeof(float)) {
+        std::cerr << "Memory access would be out of bounds!" << std::endl;
+        throw std::runtime_error("Image memory access would exceed allocated memory");
+    }
+    
+    // Clear any previous errors
+    cudaError_t err = cudaGetLastError();
+    if (err != cudaSuccess) {
+        std::cerr << "Previous error: " << cudaGetErrorString(err) << std::endl;
+    }
+    
+    // Perform the copy with error checking
+    err = cudaMemcpy(d_batch_images, 
+                     d_images + image_offset, 
+                     image_copy_size, 
+                     cudaMemcpyDeviceToDevice);
+    
+    if (err != cudaSuccess) {
+        std::cerr << "Failed to copy images: " << cudaGetErrorString(err) << std::endl;
+        throw std::runtime_error("Image copy failed");
+    }
+    
+    err = cudaMemcpy(d_batch_labels, 
+                     d_labels + label_offset, 
+                     label_copy_size, 
+                     cudaMemcpyDeviceToDevice);
+    
+    if (err != cudaSuccess) {
+        std::cerr << "Failed to copy labels: " << cudaGetErrorString(err) << std::endl;
+        throw std::runtime_error("Label copy failed");
+    }
+    
+    // Synchronize to ensure copy is complete
     CHECK_CUDA_ERROR(cudaDeviceSynchronize());
 }
