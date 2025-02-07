@@ -68,9 +68,9 @@ int main() {
 
 
         // Training hyperparameters
-        const int batch_size = 128;
+        const int batch_size = 256;
         const int num_epochs = 50;
-        const float learning_rate = 0.005f;
+        const float learning_rate = 0.01f;
         
         // Initialize dataset
         std::cout << "Initializing dataset..." << std::endl;
@@ -102,6 +102,9 @@ int main() {
         CHECK_CUDA_ERROR(cudaMalloc(&d_grad_conv_output, batch_size * 32 * 16 * 16 * sizeof(float)));
         CHECK_CUDA_ERROR(cudaMalloc(&d_grad_input, batch_size * 3 * 32 * 32 * sizeof(float)));
         
+        cudaStream_t stream;
+        CHECK_CUDA_ERROR(cudaStreamCreate(&stream));
+
         // Training loop
         std::cout << "Starting training..." << std::endl;
         for (int epoch = 0; epoch < num_epochs; ++epoch) {
