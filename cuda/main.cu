@@ -140,24 +140,30 @@ int main() {
 
                 // Get batch data
                 dataset.get_batch_data(d_batch_images, d_batch_labels, batch, batch_size);
-
+                CHECK_CUDA_ERROR(cudaDeviceSynchronize());
                 // Forward pass
                 conv1.forward(d_batch_images, d_conv_output, batch_size, 32, 32);
+                CHECK_CUDA_ERROR(cudaDeviceSynchronize());
                 fc.forward(d_conv_output, d_fc_output, batch_size);
+                CHECK_CUDA_ERROR(cudaDeviceSynchronize());
 
                 // Compute loss and accuracy
                 float batch_loss = fc.compute_loss(d_batch_labels, batch_size);
+                CHECK_CUDA_ERROR(cudaDeviceSynchronize());
                 float batch_accuracy = calculate_accuracy(d_fc_output, d_batch_labels, batch_size);
+                CHECK_CUDA_ERROR(cudaDeviceSynchronize());
 
                 epoch_loss += batch_loss;
                 epoch_accuracy += batch_accuracy;
 
                 std::cout << "Batch loss: " << batch_loss << std::endl;
                 std::cout << "Batch accuracy: " << batch_accuracy << std::endl;
-                
+                CHECK_CUDA_ERROR(cudaDeviceSynchronize());
                 // Backward pass
                 fc.backward(d_batch_labels, d_grad_conv_output, batch_size);
+                CHECK_CUDA_ERROR(cudaDeviceSynchronize());
                 conv1.backward(d_grad_conv_output, d_grad_input, batch_size);
+                CHECK_CUDA_ERROR(cudaDeviceSynchronize());
 
                 // Print progress every 10 batches
                 if ((batch + 1) % 10 == 0) {
