@@ -22,6 +22,9 @@ private:
     // Helper functions
     void allocate_memory(int batch_size);
     void free_memory();
+    void clear_temporary_memory() {
+        CHECK_CUDA_ERROR(cudaDeviceSynchronize());
+    }
 
 public:
     FullyConnectedLayer(int in_features, int num_classes, float learning_rate);

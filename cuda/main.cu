@@ -136,10 +136,14 @@ int main() {
                 std::cout << "Batch " << batch << " of " << num_batches << std::endl;
                 
                 size_t free_byte, total_byte;
-                cudaMemGetInfo(&free_byte, &total_byte);
+                CHECK_CUDA_ERROR(cudaMemGetInfo(&free_byte, &total_byte));
                 std::cout << "Batch " << batch << " memory - Free: " 
-                        << (free_byte/1024.0/1024.0) << "MB" << std::endl;
-                        
+                         << (free_byte/1024.0/1024.0) << "MB" << std::endl;
+
+                // Clear CUDA cache before each batch
+                CHECK_CUDA_ERROR(cudaDeviceSynchronize());
+                CHECK_CUDA_ERROR(cudaMemGetInfo(&free_byte, &total_byte));
+                
                 // Get batch data
                 dataset.get_batch_data(d_batch_images, d_batch_labels, batch, batch_size);
 
