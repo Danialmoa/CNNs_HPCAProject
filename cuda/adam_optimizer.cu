@@ -89,12 +89,21 @@ void AdamOptimizer::update(float* d_params, const float* d_gradients) {
     const int block_size = getOptimalBlockSize();
     const int num_blocks = (param_size + block_size - 1) / block_size;
 
-    // Print Gradients
+    // Allocate host memory for debugging
+    float* h_gradients = new float[param_size];
+    
+    // Copy gradients from device to host
+    cudaMemcpy(h_gradients, d_gradients, param_size * sizeof(float), cudaMemcpyDeviceToHost);
+    
+    // Print gradients from host memory
     std::cout << "Gradients: " << std::endl;
     for (int i = 0; i < param_size; i++) {
-        std::cout << d_gradients[i] << " ";
+        std::cout << h_gradients[i] << " ";
     }
     std::cout << std::endl;
+    
+    // Free host memory
+    delete[] h_gradients;
 
     // Launch kernel
     adam_update_kernel<<<num_blocks, block_size>>>(
