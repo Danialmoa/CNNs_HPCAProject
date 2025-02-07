@@ -5,6 +5,30 @@
 #include "include/fully_connected.cuh"
 #include "include/adam_optimizer.cuh"
 
+
+
+void print_memory_requirements(int batch_size) {
+    size_t total_memory = 0;
+    
+    // Calculate memory for each buffer
+    size_t images_memory = batch_size * 3 * 32 * 32 * sizeof(float);
+    size_t labels_memory = batch_size * 10 * sizeof(uint8_t);
+    size_t conv_output_memory = batch_size * 32 * 16 * 16 * sizeof(float);
+    size_t fc_output_memory = batch_size * 10 * sizeof(float);
+    size_t grad_memory = images_memory + conv_output_memory;
+    
+    total_memory = images_memory + labels_memory + conv_output_memory + 
+                   fc_output_memory + grad_memory;
+    
+    std::cout << "Memory requirements for batch size " << batch_size << ":" << std::endl;
+    std::cout << "Images: " << (images_memory / 1024.0 / 1024.0) << " MB" << std::endl;
+    std::cout << "Labels: " << (labels_memory / 1024.0 / 1024.0) << " MB" << std::endl;
+    std::cout << "Conv output: " << (conv_output_memory / 1024.0 / 1024.0) << " MB" << std::endl;
+    std::cout << "FC output: " << (fc_output_memory / 1024.0 / 1024.0) << " MB" << std::endl;
+    std::cout << "Gradients: " << (grad_memory / 1024.0 / 1024.0) << " MB" << std::endl;
+    std::cout << "Total: " << (total_memory / 1024.0 / 1024.0) << " MB" << std::endl;
+}
+
 // Helper function to calculate accuracy
 __global__ void calculate_accuracy_kernel(
     const float* predictions, const uint8_t* labels,
@@ -62,10 +86,20 @@ int main() {
         // Set device to use
         CHECK_CUDA_ERROR(cudaSetDevice(0));
 
+        // Print available GPU memory before starting
+        size_t free_byte, total_byte;
+        CHECK_CUDA_ERROR(cudaMemGetInfo(&free_byte, &total_byte));
+        std::cout << "GPU Memory before allocation:" << std::endl;
+        std::cout << "Free: " << (free_byte / 1024.0 / 1024.0) << " MB" << std::endl;
+        std::cout << "Total: " << (total_byte / 1024.0 / 1024.0) << " MB" << std::endl;
+
         // Training hyperparameters
         const int batch_size = 32;
         const int num_epochs = 10;
         const float learning_rate = 0.001f;
+
+        const int batch_size = 8;
+        print_memory_requirements(batch_size);
         
         // Initialize dataset
         std::cout << "Initializing dataset..." << std::endl;
