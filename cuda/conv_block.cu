@@ -144,7 +144,12 @@ __global__ void conv_backward_kernel(
         return;
     
     int output_idx = ((b * out_channels + oc) * output_height + h) * output_width + w;
-    float grad = grad_output[output_idx] / static_cast<float>(batch_size);
+    float grad = grad_output[output_idx];
+
+    const float CLIP_VALUE = 1.0f;
+    grad = fmaxf(fminf(grad, CLIP_VALUE), -CLIP_VALUE);
+
+     grad /= batch_size;
     
     // ReLU backward pass - zero out gradient where input was negative
     if (relu_output[output_idx] <= 0) {
