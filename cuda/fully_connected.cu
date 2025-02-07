@@ -36,16 +36,16 @@ __global__ void softmax_kernel(
     
     // Compute exp and sum
     float sum = 0.0f;
+    __shared__ float exp_values[10];
+
     for (int i = 0; i < num_classes; i++) {
-        float exp_val = expf(input[b * num_classes + i] - max_val);
-        output[b * num_classes + i] = exp_val;
-        sum += exp_val;
+        exp_values[i] = expf(input[b * num_classes + i] - max_val);
+        sum += exp_values[i];
     }
     
     // Normalize
-    float inv_sum = 1.0f / sum;
     for (int i = 0; i < num_classes; i++) {
-        output[b * num_classes + i] *= inv_sum;
+        output[b * num_classes + i] = exp_values[i] / (sum + 1e-7f);
     }
 }
 
@@ -86,6 +86,9 @@ __global__ void backward_kernel(
     
     int idx = b * num_classes + c;
     float grad = (softmax_output[idx] - labels[idx]);
+
+    const float CLIP_VALUE = 1.0f;
+    grad = fmaxf(fminf(grad, CLIP_VALUE), -CLIP_VALUE);
     
     // Gradient for biases
     atomicAdd(&grad_biases[c], grad);
