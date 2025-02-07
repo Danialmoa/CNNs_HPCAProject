@@ -135,23 +135,6 @@ int main() {
             CHECK_CUDA_ERROR(cudaMalloc(&d_grad_conv_output, batch_size * 32 * 16 * 16 * sizeof(float)));
             CHECK_CUDA_ERROR(cudaMalloc(&d_grad_input, batch_size * 3 * 32 * 32 * sizeof(float)));
         };
-        auto free_memory = [&]() {
-            if (d_batch_images) CHECK_CUDA_ERROR(cudaFree(d_batch_images));
-            if (d_batch_labels) CHECK_CUDA_ERROR(cudaFree(d_batch_labels));
-            if (d_conv_output) CHECK_CUDA_ERROR(cudaFree(d_conv_output));
-            if (d_fc_output) CHECK_CUDA_ERROR(cudaFree(d_fc_output));
-            if (d_grad_conv_output) CHECK_CUDA_ERROR(cudaFree(d_grad_conv_output));
-            if (d_grad_input) CHECK_CUDA_ERROR(cudaFree(d_grad_input));
-            
-            d_batch_images = nullptr;
-            d_batch_labels = nullptr;
-            d_conv_output = nullptr;
-            d_fc_output = nullptr;
-            d_grad_conv_output = nullptr;
-            d_grad_input = nullptr;
-        };
-        // Initial allocation
-        allocate_memory();
         
         // Training loop
         std::cout << "Starting training..." << std::endl;
@@ -175,13 +158,13 @@ int main() {
 
                 // Compute loss and accuracy
                 float batch_loss = fc.compute_loss(d_batch_labels, batch_size);
-                // float batch_accuracy = calculate_accuracy(d_fc_output, d_batch_labels, batch_size);
+                float batch_accuracy = calculate_accuracy(d_fc_output, d_batch_labels, batch_size);
 
                 epoch_loss += batch_loss;
                 // epoch_accuracy += batch_accuracy;
 
                 std::cout << "Batch loss: " << batch_loss << std::endl;
-                // std::cout << "Batch accuracy: " << batch_accuracy << std::endl;
+                std::cout << "Batch accuracy: " << batch_accuracy << std::endl;
                 
                 // Backward pass
                 fc.backward(d_batch_labels, d_grad_conv_output, batch_size);
@@ -194,7 +177,6 @@ int main() {
                 //               << " - Accuracy: " << batch_accuracy * 100 << "%" 
                 //               << std::flush;
                 // }
-                CHECK_CUDA_ERROR(cudaDeviceSynchronize());
             }
 
             auto epoch_end = std::chrono::high_resolution_clock::now();
