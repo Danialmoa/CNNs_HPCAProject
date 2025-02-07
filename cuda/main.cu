@@ -63,7 +63,7 @@ int main() {
         CHECK_CUDA_ERROR(cudaSetDevice(0));
 
         // Training hyperparameters
-        const int batch_size = 8;
+        const int batch_size = 32;
         const int num_epochs = 10;
         const float learning_rate = 0.001f;
         
@@ -131,6 +131,7 @@ int main() {
                               << " - Accuracy: " << batch_accuracy * 100 << "%" 
                               << std::flush;
                 }
+                CHECK_CUDA_ERROR(cudaDeviceSynchronize());
             }
 
             auto epoch_end = std::chrono::high_resolution_clock::now();
