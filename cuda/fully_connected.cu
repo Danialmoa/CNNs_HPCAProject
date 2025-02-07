@@ -69,9 +69,6 @@ __global__ void cross_entropy_loss_kernel(
         }
     }
     
-    // Normalize by batch size
-    batch_loss /= batch_size;
-    
     // Accumulate loss
     atomicAdd(loss, batch_loss);
 }
@@ -88,7 +85,7 @@ __global__ void backward_kernel(
     if (b >= batch_size || c >= num_classes) return;
     
     int idx = b * num_classes + c;
-    float grad = (softmax_output[idx] - labels[idx]) / batch_size;
+    float grad = (softmax_output[idx] - labels[idx])
     
     // Gradient for biases
     atomicAdd(&grad_biases[c], grad);
