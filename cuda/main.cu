@@ -112,8 +112,7 @@ int main() {
             float epoch_accuracy = 0.0f;
             auto epoch_start = std::chrono::high_resolution_clock::now();
             // SAMPLE BATCH
-            int sample_num_batches = 1;
-            for (int batch = 0; batch < sample_num_batches; ++batch) {
+            for (int batch = 0; batch < num_batches; ++batch) {
                 // Get batch data
                 dataset.get_batch_data(d_batch_images, d_batch_labels, batch, batch_size);
 
