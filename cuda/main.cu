@@ -178,7 +178,7 @@ int main() {
                 float batch_accuracy = calculate_accuracy(d_fc_output, d_batch_labels, batch_size);
 
                 epoch_loss += batch_loss;
-                epoch_accuracy += batch_accuracy;
+                // epoch_accuracy += batch_accuracy;
 
                 std::cout << "Batch loss: " << batch_loss << std::endl;
                 std::cout << "Batch accuracy: " << batch_accuracy << std::endl;
@@ -188,11 +188,11 @@ int main() {
                 conv1.backward(d_grad_conv_output, d_grad_input, batch_size);
 
                 // Print progress every 10 batches
-                if ((batch + 1) % 10 == 0) {
-                    std::cout << "\rBatch " << batch + 1 << "/" << num_batches 
-                              << " - Loss: " << batch_loss 
-                              << " - Accuracy: " << batch_accuracy * 100 << "%" 
-                              << std::flush;
+                // if ((batch + 1) % 10 == 0) {
+                //     std::cout << "\rBatch " << batch + 1 << "/" << num_batches 
+                //               << " - Loss: " << batch_loss 
+                //               << " - Accuracy: " << batch_accuracy * 100 << "%" 
+                //               << std::flush;
                 }
                 CHECK_CUDA_ERROR(cudaDeviceSynchronize());
             }
