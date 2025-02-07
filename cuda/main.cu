@@ -142,7 +142,9 @@ int main() {
 
                 // Forward pass
                 conv1.forward(d_batch_images, d_conv_output, batch_size, 32, 32);
+                sync_device();
                 fc.forward(d_conv_output, d_fc_output, batch_size);
+                sync_device();
 
                 // Compute loss and accuracy
                 float batch_loss = fc.compute_loss(d_batch_labels, batch_size);
@@ -153,7 +155,9 @@ int main() {
                 
                 // Backward pass
                 fc.backward(d_batch_labels, d_grad_conv_output, batch_size);
+                sync_device();
                 conv1.backward(d_grad_conv_output, d_grad_input, batch_size);
+                sync_device();
 
             }
 
@@ -168,14 +172,6 @@ int main() {
                       << " - Accuracy: " << epoch_accuracy * 100 << "%" 
                       << " - Time: " << duration.count() << "s" << std::endl;
             
-            // Clean up
-
-            CHECK_CUDA_ERROR(cudaFree(d_batch_images));
-            CHECK_CUDA_ERROR(cudaFree(d_batch_labels));
-            CHECK_CUDA_ERROR(cudaFree(d_conv_output));
-            CHECK_CUDA_ERROR(cudaFree(d_fc_output));
-            CHECK_CUDA_ERROR(cudaFree(d_grad_conv_output));
-            CHECK_CUDA_ERROR(cudaFree(d_grad_input));
         }
 
         // Reset device
