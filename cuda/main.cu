@@ -162,6 +162,14 @@ int main() {
                     // Free host memory
                     delete[] h_predictions;
                     delete[] h_labels;
+
+                    // Print conv1 weights
+                    std::cout << "Conv1 weights: " << std::endl;
+                    for (int i = 0; i < 32; i++) {
+                        for (int j = 0; j < 3; j++) {
+                            std::cout << conv1.d_weights[i * 3 + j] << " ";
+                        }
+                    }
                 }
 
             }
