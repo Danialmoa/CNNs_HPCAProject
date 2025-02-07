@@ -126,15 +126,14 @@ int main() {
         float *d_grad_conv_output = nullptr;
         float *d_grad_input = nullptr;
 
-        // Function to allocate memory
-        auto allocate_memory = [&]() {
-            CHECK_CUDA_ERROR(cudaMalloc(&d_batch_images, batch_size * 3 * 32 * 32 * sizeof(float)));
-            CHECK_CUDA_ERROR(cudaMalloc(&d_batch_labels, batch_size * 10 * sizeof(uint8_t)));
-            CHECK_CUDA_ERROR(cudaMalloc(&d_conv_output, batch_size * 32 * 16 * 16 * sizeof(float)));
-            CHECK_CUDA_ERROR(cudaMalloc(&d_fc_output, batch_size * 10 * sizeof(float)));
-            CHECK_CUDA_ERROR(cudaMalloc(&d_grad_conv_output, batch_size * 32 * 16 * 16 * sizeof(float)));
-            CHECK_CUDA_ERROR(cudaMalloc(&d_grad_input, batch_size * 3 * 32 * 32 * sizeof(float)));
-        };
+        // Allocate memory
+        CHECK_CUDA_ERROR(cudaMalloc(&d_batch_images, batch_size * 3 * 32 * 32 * sizeof(float)));
+        CHECK_CUDA_ERROR(cudaMalloc(&d_batch_labels, batch_size * 10 * sizeof(uint8_t)));
+        CHECK_CUDA_ERROR(cudaMalloc(&d_conv_output, batch_size * 32 * 16 * 16 * sizeof(float)));
+        CHECK_CUDA_ERROR(cudaMalloc(&d_fc_output, batch_size * 10 * sizeof(float)));
+        CHECK_CUDA_ERROR(cudaMalloc(&d_grad_conv_output, batch_size * 32 * 16 * 16 * sizeof(float)));
+        CHECK_CUDA_ERROR(cudaMalloc(&d_grad_input, batch_size * 3 * 32 * 32 * sizeof(float)));
+        
         
         // Training loop
         std::cout << "Starting training..." << std::endl;
@@ -177,6 +176,14 @@ int main() {
                 //               << " - Accuracy: " << batch_accuracy * 100 << "%" 
                 //               << std::flush;
                 // }
+
+                // Free memory
+                CHECK_CUDA_ERROR(cudaFree(d_batch_images));
+                CHECK_CUDA_ERROR(cudaFree(d_batch_labels));
+                CHECK_CUDA_ERROR(cudaFree(d_conv_output));
+                CHECK_CUDA_ERROR(cudaFree(d_fc_output));
+                CHECK_CUDA_ERROR(cudaFree(d_grad_conv_output));
+                CHECK_CUDA_ERROR(cudaFree(d_grad_input));
             }
 
             auto epoch_end = std::chrono::high_resolution_clock::now();
