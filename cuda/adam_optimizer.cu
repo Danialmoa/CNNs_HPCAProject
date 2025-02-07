@@ -89,6 +89,13 @@ void AdamOptimizer::update(float* d_params, const float* d_gradients) {
     const int block_size = getOptimalBlockSize();
     const int num_blocks = (param_size + block_size - 1) / block_size;
 
+    // Print Gradients
+    std::cout << "Gradients: " << std::endl;
+    for (int i = 0; i < param_size; i++) {
+        std::cout << d_gradients[i] << " ";
+    }
+    std::cout << std::endl;
+
     // Launch kernel
     adam_update_kernel<<<num_blocks, block_size>>>(
         d_params, d_gradients,
