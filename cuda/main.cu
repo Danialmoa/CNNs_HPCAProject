@@ -193,7 +193,7 @@ int main() {
                 //               << " - Loss: " << batch_loss 
                 //               << " - Accuracy: " << batch_accuracy * 100 << "%" 
                 //               << std::flush;
-                }
+                // }
                 CHECK_CUDA_ERROR(cudaDeviceSynchronize());
             }
 
