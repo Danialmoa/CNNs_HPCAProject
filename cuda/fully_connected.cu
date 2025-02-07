@@ -65,12 +65,6 @@ __global__ void cross_entropy_loss_kernel(
             float pred = fmaxf(softmax_output[b * num_classes + i], 1e-10f);
             batch_loss = -logf(pred);
             
-            // Debug print for first few samples
-            if (b < 4) {
-                printf("Batch %d, True class %d, Prediction %f, Loss %f\n", 
-                       b, i, pred, batch_loss);
-            }
-            
             break;
         }
     }
