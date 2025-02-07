@@ -443,7 +443,7 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
     dim3 blockDim(256);
 
     conv_backward_kernel<<<gridDim, blockDim>>>(
-        d_grad_output, d_weights,
+        d_unpooled_grad, d_weights,
         d_grad_input, d_grad_weights, d_grad_biases,
         d_cache, d_relu_output_cache,
         batch_size, in_channels, out_channels,
