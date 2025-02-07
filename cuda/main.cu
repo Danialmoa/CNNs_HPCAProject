@@ -156,7 +156,7 @@ int main() {
                 fc.backward(d_batch_labels, d_grad_conv_output, batch_size);
                 conv1.backward(d_grad_conv_output, d_grad_input, batch_size);
 
-                Print progress every 10 batches
+                //Print progress every 10 batches
                 if ((batch + 1) % 10 == 0) {
                     std::cout << "\rBatch " << batch + 1 << "/" << num_batches 
                               << " - Loss: " << batch_loss 
