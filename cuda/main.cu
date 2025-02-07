@@ -34,12 +34,11 @@ __global__ void calculate_accuracy_kernel(
     const float* predictions, const uint8_t* labels,
     int* correct_predictions, int batch_size, int num_classes) {
     
-    int idx = blockIdx.x;
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx >= batch_size) return;
 
     float max_val = predictions[idx * num_classes];
     int pred_class = 0;
-    int true_class = 0;
 
     // Find predicted class
     for (int i = 1; i < num_classes; i++) {
@@ -51,6 +50,7 @@ __global__ void calculate_accuracy_kernel(
     }
 
     // Find true class
+    int true_class = -1;
     for (int i = 0; i < num_classes; i++) {
         if (labels[idx * num_classes + i] == 1) {
             true_class = i;
@@ -58,7 +58,7 @@ __global__ void calculate_accuracy_kernel(
         }
     }
 
-    if (pred_class == true_class) {
+    if (true_class != -1 && pred_class == true_class) {
         atomicAdd(correct_predictions, 1);
     }
 }
@@ -70,10 +70,14 @@ float calculate_accuracy(const float* d_predictions, const uint8_t* d_labels, in
     CHECK_CUDA_ERROR(cudaMalloc(&d_correct, sizeof(int)));
     CHECK_CUDA_ERROR(cudaMemset(d_correct, 0, sizeof(int)));
 
-    calculate_accuracy_kernel<<<batch_size, 1>>>(
+    int threadsPerBlock = 256;
+    int numBlocks = (batch_size + threadsPerBlock - 1) / threadsPerBlock;
+    
+    calculate_accuracy_kernel<<<numBlocks, threadsPerBlock>>>(
         d_predictions, d_labels, d_correct, batch_size, 10
     );
     CHECK_LAST_CUDA_ERROR();
+    CHECK_CUDA_ERROR(cudaDeviceSynchronize());
 
     CHECK_CUDA_ERROR(cudaMemcpy(&h_correct, d_correct, sizeof(int), cudaMemcpyDeviceToHost));
     cudaFree(d_correct);
@@ -94,7 +98,7 @@ int main() {
         std::cout << "Total: " << (total_byte / 1024.0 / 1024.0) << " MB" << std::endl;
 
         // Training hyperparameters
-        const int batch_size = 16;
+        const int batch_size = 32;
         const int num_epochs = 10;
         const float learning_rate = 0.001f;
         print_memory_requirements(batch_size);
@@ -140,30 +144,24 @@ int main() {
 
                 // Get batch data
                 dataset.get_batch_data(d_batch_images, d_batch_labels, batch, batch_size);
-                CHECK_CUDA_ERROR(cudaDeviceSynchronize());
+
                 // Forward pass
                 conv1.forward(d_batch_images, d_conv_output, batch_size, 32, 32);
-                CHECK_CUDA_ERROR(cudaDeviceSynchronize());
                 fc.forward(d_conv_output, d_fc_output, batch_size);
-                CHECK_CUDA_ERROR(cudaDeviceSynchronize());
 
                 // Compute loss and accuracy
                 float batch_loss = fc.compute_loss(d_batch_labels, batch_size);
-                CHECK_CUDA_ERROR(cudaDeviceSynchronize());
                 float batch_accuracy = calculate_accuracy(d_fc_output, d_batch_labels, batch_size);
-                CHECK_CUDA_ERROR(cudaDeviceSynchronize());
 
                 epoch_loss += batch_loss;
                 epoch_accuracy += batch_accuracy;
 
                 std::cout << "Batch loss: " << batch_loss << std::endl;
                 std::cout << "Batch accuracy: " << batch_accuracy << std::endl;
-                CHECK_CUDA_ERROR(cudaDeviceSynchronize());
+                
                 // Backward pass
                 fc.backward(d_batch_labels, d_grad_conv_output, batch_size);
-                CHECK_CUDA_ERROR(cudaDeviceSynchronize());
                 conv1.backward(d_grad_conv_output, d_grad_input, batch_size);
-                CHECK_CUDA_ERROR(cudaDeviceSynchronize());
 
                 // Print progress every 10 batches
                 if ((batch + 1) % 10 == 0) {
