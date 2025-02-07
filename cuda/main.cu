@@ -100,7 +100,7 @@ int main() {
         std::cout << "Total: " << (total_byte / 1024.0 / 1024.0) << " MB" << std::endl;
 
         // Training hyperparameters
-        const int batch_size = 32;
+        const int batch_size = 4;
         const int num_epochs = 10;
         const float learning_rate = 0.001f;
         print_memory_requirements(batch_size);
