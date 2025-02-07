@@ -23,44 +23,70 @@ __global__ void conv_forward_kernel(
     int output_height,
     int output_width) {
     
-    
+        __shared__ float shared_input[TILE_SIZE + BLOCK_SIZE - 1][TILE_SIZE + BLOCK_SIZE - 1];
+    __shared__ float shared_weights[BLOCK_SIZE][BLOCK_SIZE];
+
     // Calculate output position
     int b = blockIdx.x;                                    // Batch index
     int oc = blockIdx.y;                                   // Output channel
-    int idx = blockIdx.z * blockDim.x + threadIdx.x;       // Spatial position
-    int h = idx / output_width;                           // Output height position
-    int w = idx % output_width;                           // Output width position
-    
-    // Bounds checking
-    if (b >= batch_size || oc >= out_channels || h >= output_height || w >= output_width) 
-        return;
-    
-    // Start with bias term
-    float sum = biases[oc];
+    int h = (blockIdx.z / ((output_width + TILE_SIZE - 1) / TILE_SIZE)) * TILE_SIZE + threadIdx.y;
+    int w = (blockIdx.z % ((output_width + TILE_SIZE - 1) / TILE_SIZE)) * TILE_SIZE + threadIdx.x;
 
-    // Compute convolution
+    // Initialize accumulator
+    float sum = 0.0f;
+    if (threadIdx.x < BLOCK_SIZE && threadIdx.y < BLOCK_SIZE) {
+        sum = biases[oc];
+    }
+
+    // Loop over input channels
     for (int ic = 0; ic < in_channels; ic++) {
-        for (int kh = 0; kh < kernel_size; kh++) {
-            for (int kw = 0; kw < kernel_size; kw++) {
-                // Calculate input position with stride and padding
-                int ih = h * stride - padding + kh;
-                int iw = w * stride - padding + kw;
+        // Load input tile into shared memory
+        for (int i = threadIdx.y; i < TILE_SIZE + kernel_size - 1; i += BLOCK_SIZE) {
+            for (int j = threadIdx.x; j < TILE_SIZE + kernel_size - 1; j += BLOCK_SIZE) {
+                int ih = h * stride - padding + i;
+                int iw = w * stride - padding + j;
                 
-                // Only accumulate if within input bounds
-                if (ih >= 0 && ih < height && iw >= 0 && iw < width) {
-                    int input_idx = ((b * in_channels + ic) * height + ih) * width + iw;
-                    int weight_idx = ((oc * in_channels + ic) * kernel_size + kh) * kernel_size + kw;
-                    sum += input[input_idx] * weights[weight_idx];
+                if (ih >= 0 && ih < height && iw >= 0 && iw < width && b < batch_size) {
+                    shared_input[i][j] = input[((b * in_channels + ic) * height + ih) * width + iw];
+                } else {
+                    shared_input[i][j] = 0.0f;
                 }
             }
         }
+
+        // Load weights into shared memory
+        if (threadIdx.y < kernel_size && threadIdx.x < kernel_size) {
+            shared_weights[threadIdx.y][threadIdx.x] = 
+                weights[((oc * in_channels + ic) * kernel_size + threadIdx.y) * kernel_size + threadIdx.x];
+        }
+
+        __syncthreads();
+
+        // Compute convolution for this tile
+        if (threadIdx.x < BLOCK_SIZE && threadIdx.y < BLOCK_SIZE && 
+            h < output_height && w < output_width && b < batch_size && oc < out_channels) {
+            
+            for (int kh = 0; kh < kernel_size; kh++) {
+                for (int kw = 0; kw < kernel_size; kw++) {
+                    int ih = threadIdx.y * stride + kh;
+                    int iw = threadIdx.x * stride + kw;
+                    sum += shared_input[ih][iw] * shared_weights[kh][kw];
+                }
+            }
+        }
+
+        __syncthreads();
     }
-    
-    // Write outputs
-    int output_idx = ((b * out_channels + oc) * output_height + h) * output_width + w;
-    conv_output[output_idx] = sum;
-    const float alpha = 0.01f;  // small slope for negative values
-    relu_output[output_idx] = sum > 0 ? sum : alpha * sum;
+
+    // Write output
+    if (h < output_height && w < output_width && b < batch_size && oc < out_channels) {
+        int output_idx = ((b * out_channels + oc) * output_height + h) * output_width + w;
+        conv_output[output_idx] = sum;
+        
+        // ReLU activation
+        const float alpha = 0.01f;  // Leaky ReLU slope
+        relu_output[output_idx] = sum > 0 ? sum : alpha * sum;
+    }
 }
 
 // Performs max pooling and tracks indices for backprop
@@ -344,10 +370,11 @@ void ConvBlock::forward(const float* d_input, float* d_output, int batch_size, i
     CHECK_CUDA_ERROR(cudaMemcpy(d_cache, d_input, input_size, cudaMemcpyDeviceToDevice));
 
     // Launch convolution kernel
-    dim3 gridDim(batch_size, 
-                 out_channels, 
-                 (conv_output_height * conv_output_width + 255) / 256);
-    dim3 blockDim(256);
+    dim3 block(BLOCK_SIZE, BLOCK_SIZE);
+    dim3 grid(batch_size,
+              out_channels,
+              ((output_height + TILE_SIZE - 1) / TILE_SIZE) * 
+              ((output_width + TILE_SIZE - 1) / TILE_SIZE));
 
     conv_forward_kernel<<<gridDim, blockDim>>>(
         d_cache,
