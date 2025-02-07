@@ -135,6 +135,11 @@ int main() {
             for (int batch = 0; batch < num_batches; ++batch) {
                 std::cout << "Batch " << batch << " of " << num_batches << std::endl;
                 
+                size_t free_byte, total_byte;
+                cudaMemGetInfo(&free_byte, &total_byte);
+                std::cout << "Batch " << batch << " memory - Free: " 
+                        << (free_byte/1024.0/1024.0) << "MB" << std::endl;
+                        
                 // Get batch data
                 dataset.get_batch_data(d_batch_images, d_batch_labels, batch, batch_size);
 
