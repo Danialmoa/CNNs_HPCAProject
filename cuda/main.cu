@@ -94,7 +94,7 @@ int main() {
 
 
         // Training hyperparameters
-        const int batch_size = 32;
+        const int batch_size = 64;
         const int num_epochs = 10;
         const float learning_rate = 0.001f;
         
@@ -137,7 +137,6 @@ int main() {
             auto epoch_start = std::chrono::high_resolution_clock::now();
 
             for (int batch = 0; batch < num_batches; ++batch) {
-                std::cout << "Batch " << batch << " of " << num_batches << std::endl;
                 // Get batch data
                 dataset.get_batch_data(d_batch_images, d_batch_labels, batch, batch_size);
 
@@ -156,13 +155,6 @@ int main() {
                 fc.backward(d_batch_labels, d_grad_conv_output, batch_size);
                 conv1.backward(d_grad_conv_output, d_grad_input, batch_size);
 
-                //Print progress every 10 batches
-                if ((batch + 1) % 10 == 0) {
-                    std::cout << "\rBatch " << batch + 1 << "/" << num_batches 
-                              << " - Loss: " << batch_loss 
-                              << " - Accuracy: " << batch_accuracy * 100 << "%" 
-                              << std::flush;
-                }
             }
 
             auto epoch_end = std::chrono::high_resolution_clock::now();
