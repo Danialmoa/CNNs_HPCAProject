@@ -9,6 +9,7 @@ class FullyConnectedLayer {
 private:
     int in_features, num_classes;
     float learning_rate;
+    int current_batch_size;
     
     // Device pointers
     float *d_weights, *d_biases;
@@ -16,7 +17,7 @@ private:
     float *d_output_cache;   // Store softmax output for backward pass
    
     //Adam Optimizer
-   AdamOptimizer weights_optimizer;
+    AdamOptimizer weights_optimizer;
     AdamOptimizer bias_optimizer;
 
     // Helper functions

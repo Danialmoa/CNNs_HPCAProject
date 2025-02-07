@@ -235,6 +235,7 @@ void ConvBlock::allocate_memory(int batch_size) {
     if (d_relu_output_cache) cudaFree(d_relu_output_cache);
     if (d_pool_indices) cudaFree(d_pool_indices);
     if (d_cache) cudaFree(d_cache);
+
     d_cache = nullptr;
     d_conv_output_cache = nullptr;
     d_relu_output_cache = nullptr;
@@ -246,11 +247,6 @@ void ConvBlock::allocate_memory(int batch_size) {
     pool_output_height = (conv_output_height - pool_size) / pool_stride + 1;
     pool_output_width = (conv_output_width - pool_size) / pool_stride + 1;
 
-    if (d_conv_output_cache) cudaFree(d_conv_output_cache);
-    if (d_relu_output_cache) cudaFree(d_relu_output_cache);
-    if (d_pool_indices) cudaFree(d_pool_indices);
-    if (d_cache) cudaFree(d_cache);
-    
     size_t conv_size = batch_size * out_channels * conv_output_height * conv_output_width;
     size_t input_size = batch_size * in_channels * input_height * input_width;
 
@@ -259,6 +255,8 @@ void ConvBlock::allocate_memory(int batch_size) {
     CHECK_CUDA_ERROR(cudaMalloc(&d_relu_output_cache, conv_size * sizeof(float)));
     CHECK_CUDA_ERROR(cudaMalloc(&d_pool_indices, conv_size * sizeof(int)));
     CHECK_CUDA_ERROR(cudaMalloc(&d_cache, input_size * sizeof(float)));
+
+    current_batch_size = batch_size;
 }
 
 // Frees all GPU memory

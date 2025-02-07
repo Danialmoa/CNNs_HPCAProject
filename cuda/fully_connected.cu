@@ -94,7 +94,10 @@ __global__ void backward_kernel(
 
 FullyConnectedLayer::FullyConnectedLayer(int in_features, int num_classes, float learning_rate)
     : in_features(in_features), num_classes(num_classes), learning_rate(learning_rate),weights_optimizer(learning_rate),
-      bias_optimizer(learning_rate)
+      bias_optimizer(learning_rate),
+      current_batch_size(0),
+      d_input_cache(nullptr),
+      d_output_cache(nullptr)
     {
     
     // Initialize weights and biases on CPU
@@ -132,10 +135,19 @@ FullyConnectedLayer::~FullyConnectedLayer() {
 }
 
 void FullyConnectedLayer::allocate_memory(int batch_size) {
-    CHECK_CUDA_ERROR(cudaMalloc(&d_input_cache, 
-                               batch_size * in_features * sizeof(float)));
-    CHECK_CUDA_ERROR(cudaMalloc(&d_output_cache, 
-                               batch_size * num_classes * sizeof(float)));
+     if (current_batch_size != batch_size) {
+            // Free existing memory
+            if (d_input_cache) cudaFree(d_input_cache);
+            if (d_output_cache) cudaFree(d_output_cache);
+            
+            // Allocate new memory
+            CHECK_CUDA_ERROR(cudaMalloc(&d_input_cache, 
+                                      batch_size * in_features * sizeof(float)));
+            CHECK_CUDA_ERROR(cudaMalloc(&d_output_cache, 
+                                      batch_size * num_classes * sizeof(float)));
+            
+        current_batch_size = batch_size;
+    }
 }
 
 void FullyConnectedLayer::free_memory() {
