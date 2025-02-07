@@ -29,6 +29,20 @@ void print_memory_requirements(int batch_size) {
     std::cout << "Total: " << (total_memory / 1024.0 / 1024.0) << " MB" << std::endl;
 }
 
+
+void check_gpu_memory(const char* checkpoint) {
+    size_t free_byte, total_byte;
+    CHECK_CUDA_ERROR(cudaMemGetInfo(&free_byte, &total_byte));
+    float free_gb = free_byte / 1024.0 / 1024.0 / 1024.0;
+    float total_gb = total_byte / 1024.0 / 1024.0 / 1024.0;
+    float used_gb = total_gb - free_gb;
+    
+    std::cout << "GPU Memory at " << checkpoint << ":" << std::endl;
+    std::cout << "Free: " << free_gb << " GB" << std::endl;
+    std::cout << "Used: " << used_gb << " GB" << std::endl;
+    std::cout << "Total: " << total_gb << " GB" << std::endl;
+}
+
 // Helper function to calculate accuracy
 __global__ void calculate_accuracy_kernel(
     const float* predictions, const uint8_t* labels,
@@ -138,7 +152,7 @@ int main() {
 
             for (int batch = 0; batch < num_batches; ++batch) {
                 std::cout << "Batch " << batch << " of " << num_batches << std::endl;
-
+                check_gpu_memory("start of batch");
                 // Clear CUDA cache before each batch
                 CHECK_CUDA_ERROR(cudaDeviceSynchronize());
 
@@ -170,6 +184,7 @@ int main() {
                               << " - Accuracy: " << batch_accuracy * 100 << "%" 
                               << std::flush;
                 }
+                check_gpu_memory("end of batch");
                 CHECK_CUDA_ERROR(cudaDeviceSynchronize());
             }
 
