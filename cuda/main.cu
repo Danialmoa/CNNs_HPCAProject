@@ -167,16 +167,17 @@ int main() {
                       << " - Loss: " << epoch_loss 
                       << " - Accuracy: " << epoch_accuracy * 100 << "%" 
                       << " - Time: " << duration.count() << "s" << std::endl;
+            
+            // Clean up
+            conv1.free_memory();
+            fc.free_memory();
+            CHECK_CUDA_ERROR(cudaFree(d_batch_images));
+            CHECK_CUDA_ERROR(cudaFree(d_batch_labels));
+            CHECK_CUDA_ERROR(cudaFree(d_conv_output));
+            CHECK_CUDA_ERROR(cudaFree(d_fc_output));
+            CHECK_CUDA_ERROR(cudaFree(d_grad_conv_output));
+            CHECK_CUDA_ERROR(cudaFree(d_grad_input));
         }
-
-        // Clean up
-        std::cout << "Cleaning up..." << std::endl;
-        CHECK_CUDA_ERROR(cudaFree(d_batch_images));
-        CHECK_CUDA_ERROR(cudaFree(d_batch_labels));
-        CHECK_CUDA_ERROR(cudaFree(d_conv_output));
-        CHECK_CUDA_ERROR(cudaFree(d_fc_output));
-        CHECK_CUDA_ERROR(cudaFree(d_grad_conv_output));
-        CHECK_CUDA_ERROR(cudaFree(d_grad_input));
 
         // Reset device
         CHECK_CUDA_ERROR(cudaDeviceReset());
