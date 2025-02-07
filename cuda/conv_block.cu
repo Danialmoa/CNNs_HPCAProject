@@ -144,10 +144,10 @@ __global__ void conv_backward_kernel(
         return;
     
     int output_idx = ((b * out_channels + oc) * output_height + h) * output_width + w;
-    float grad = grad_output[output_idx];
+    float grad = grad_output[output_idx] / static_cast<float>(batch_size);
     
     // ReLU backward pass - zero out gradient where input was negative
-    if (relu_output[output_idx] <= 0) {
+    if (conv_output[output_idx] <= 0) {
         grad = 0;
     }
     
@@ -322,7 +322,7 @@ void ConvBlock::forward(const float* d_input, float* d_output, int batch_size, i
     current_batch_size = batch_size;
     
     // Allocate memory for this forward pass
-    allocate_memory(batch_size);
+    // allocate_memory(batch_size);
 
     // Cache input for backward pass
     size_t input_size = batch_size * in_channels * height * width * sizeof(float);
