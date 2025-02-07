@@ -97,8 +97,6 @@ int main() {
         const int batch_size = 32;
         const int num_epochs = 10;
         const float learning_rate = 0.001f;
-
-        const int batch_size = 8;
         print_memory_requirements(batch_size);
         
         // Initialize dataset
