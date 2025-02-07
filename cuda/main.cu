@@ -5,8 +5,6 @@
 #include "include/fully_connected.cuh"
 #include "include/adam_optimizer.cuh"
 
-
-
 // Helper function to calculate accuracy
 __global__ void calculate_accuracy_kernel(
     const float* predictions, const uint8_t* labels,
@@ -104,14 +102,13 @@ int main() {
         CHECK_CUDA_ERROR(cudaMalloc(&d_grad_conv_output, batch_size * 32 * 16 * 16 * sizeof(float)));
         CHECK_CUDA_ERROR(cudaMalloc(&d_grad_input, batch_size * 3 * 32 * 32 * sizeof(float)));
         
-        
         // Training loop
         std::cout << "Starting training..." << std::endl;
         for (int epoch = 0; epoch < num_epochs; ++epoch) {
             float epoch_loss = 0.0f;
             float epoch_accuracy = 0.0f;
             auto epoch_start = std::chrono::high_resolution_clock::now();
-            // SAMPLE BATCH
+
             for (int batch = 0; batch < num_batches; ++batch) {
                 // Get batch data
                 dataset.get_batch_data(d_batch_images, d_batch_labels, batch, batch_size);
@@ -132,7 +129,7 @@ int main() {
                 conv1.backward(d_grad_conv_output, d_grad_input, batch_size);
 
                 /// PRINT FIRST BATCH PREDICTIONS AND LABELS
-                if (batch == 0) {
+                if (batch == 0 || batch == 1) {
                     // Allocate host memory
                     float* h_predictions = new float[batch_size * 10];  // 10 classes
                     uint8_t* h_labels = new uint8_t[batch_size * 10];
