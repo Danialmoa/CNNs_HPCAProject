@@ -29,6 +29,9 @@ private:
     // Helper functions
     void allocate_memory(int batch_size);
     void free_memory();
+    void clear_cache() {
+        cudaDeviceSynchronize();
+    }
 
 public:
     ConvBlock(int in_channels, int out_channels, int kernel_size, 
