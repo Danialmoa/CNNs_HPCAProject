@@ -37,7 +37,6 @@ __global__ void calculate_accuracy_kernel(
     int* correct_predictions, int batch_size, int num_classes) {
     
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx >= batch_size) return;
 
     float max_val = predictions[idx * num_classes];
@@ -54,7 +53,6 @@ __global__ void calculate_accuracy_kernel(
 
     // Find true class
     int true_class = -1;
-    int true_class = -1;
     for (int i = 0; i < num_classes; i++) {
         if (labels[idx * num_classes + i] == 1) {
             true_class = i;
@@ -62,7 +60,6 @@ __global__ void calculate_accuracy_kernel(
         }
     }
 
-    if (true_class != -1 && pred_class == true_class) {
     if (true_class != -1 && pred_class == true_class) {
         atomicAdd(correct_predictions, 1);
     }
@@ -79,14 +76,9 @@ float calculate_accuracy(const float* d_predictions, const uint8_t* d_labels, in
     int numBlocks = (batch_size + threadsPerBlock - 1) / threadsPerBlock;
     
     calculate_accuracy_kernel<<<numBlocks, threadsPerBlock>>>(
-    int threadsPerBlock = 256;
-    int numBlocks = (batch_size + threadsPerBlock - 1) / threadsPerBlock;
-    
-    calculate_accuracy_kernel<<<numBlocks, threadsPerBlock>>>(
         d_predictions, d_labels, d_correct, batch_size, 10
     );
     CHECK_LAST_CUDA_ERROR();
-    CHECK_CUDA_ERROR(cudaDeviceSynchronize());
     CHECK_CUDA_ERROR(cudaDeviceSynchronize());
 
     CHECK_CUDA_ERROR(cudaMemcpy(&h_correct, d_correct, sizeof(int), cudaMemcpyDeviceToHost));
@@ -100,24 +92,18 @@ int main() {
         // Set device to use
         CHECK_CUDA_ERROR(cudaSetDevice(0));
 
-        // Print available GPU memory before starting
-        size_t free_byte, total_byte;
-        CHECK_CUDA_ERROR(cudaMemGetInfo(&free_byte, &total_byte));
-        std::cout << "GPU Memory before allocation:" << std::endl;
-        std::cout << "Free: " << (free_byte / 1024.0 / 1024.0) << " MB" << std::endl;
-        std::cout << "Total: " << (total_byte / 1024.0 / 1024.0) << " MB" << std::endl;
 
         // Training hyperparameters
         const int batch_size = 4;
         const int num_epochs = 10;
         const float learning_rate = 0.001f;
-        print_memory_requirements(batch_size);
         
         // Initialize dataset
         std::cout << "Initializing dataset..." << std::endl;
         DataSet dataset("../../data");
         dataset.load_data();
         dataset.to_gpu();
+
         const int num_batches = dataset.get_num_batches(batch_size);
         std::cout << "Number of batches: " << num_batches << std::endl;
         
@@ -152,13 +138,8 @@ int main() {
 
             for (int batch = 0; batch < num_batches; ++batch) {
                 std::cout << "Batch " << batch << " of " << num_batches << std::endl;
-
-                // Clear CUDA cache before each batch
-                CHECK_CUDA_ERROR(cudaDeviceSynchronize());
-
                 // Get batch data
                 dataset.get_batch_data(d_batch_images, d_batch_labels, batch, batch_size);
-
 
                 // Forward pass
                 conv1.forward(d_batch_images, d_conv_output, batch_size, 32, 32);
@@ -169,31 +150,19 @@ int main() {
                 float batch_accuracy = calculate_accuracy(d_fc_output, d_batch_labels, batch_size);
 
                 epoch_loss += batch_loss;
-                // epoch_accuracy += batch_accuracy;
-
-                std::cout << "Batch loss: " << batch_loss << std::endl;
-                std::cout << "Batch accuracy: " << batch_accuracy << std::endl;
-                
+                epoch_accuracy += batch_accuracy;
                 
                 // Backward pass
                 fc.backward(d_batch_labels, d_grad_conv_output, batch_size);
                 conv1.backward(d_grad_conv_output, d_grad_input, batch_size);
 
-                // Print progress every 10 batches
-                // if ((batch + 1) % 10 == 0) {
-                //     std::cout << "\rBatch " << batch + 1 << "/" << num_batches 
-                //               << " - Loss: " << batch_loss 
-                //               << " - Accuracy: " << batch_accuracy * 100 << "%" 
-                //               << std::flush;
-                // }
-
-                // Free memory
-                CHECK_CUDA_ERROR(cudaFree(d_batch_images));
-                CHECK_CUDA_ERROR(cudaFree(d_batch_labels));
-                CHECK_CUDA_ERROR(cudaFree(d_conv_output));
-                CHECK_CUDA_ERROR(cudaFree(d_fc_output));
-                CHECK_CUDA_ERROR(cudaFree(d_grad_conv_output));
-                CHECK_CUDA_ERROR(cudaFree(d_grad_input));
+                Print progress every 10 batches
+                if ((batch + 1) % 10 == 0) {
+                    std::cout << "\rBatch " << batch + 1 << "/" << num_batches 
+                              << " - Loss: " << batch_loss 
+                              << " - Accuracy: " << batch_accuracy * 100 << "%" 
+                              << std::flush;
+                }
             }
 
             auto epoch_end = std::chrono::high_resolution_clock::now();
