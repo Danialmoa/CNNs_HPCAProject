@@ -133,16 +133,35 @@ int main() {
 
                 /// PRINT FIRST BATCH PREDICTIONS AND LABELS
                 if (batch == 0) {
+                    // Allocate host memory
+                    float* h_predictions = new float[batch_size * 10];  // 10 classes
+                    uint8_t* h_labels = new uint8_t[batch_size * 10];
+                    
+                    // Copy from device to host
+                    cudaMemcpy(h_predictions, d_fc_output, batch_size * 10 * sizeof(float), cudaMemcpyDeviceToHost);
+                    cudaMemcpy(h_labels, d_batch_labels, batch_size * 10 * sizeof(uint8_t), cudaMemcpyDeviceToHost);
+                    
+                    // Print predictions
                     std::cout << "First batch predictions: " << std::endl;
                     for (int i = 0; i < batch_size; i++) {
-                        std::cout << d_fc_output[i] << " ";
+                        for (int j = 0; j < 10; j++) {  // Print all 10 class probabilities
+                            std::cout << h_predictions[i * 10 + j] << " ";
+                        }
+                        std::cout << std::endl;
                     }
-                    std::cout << std::endl;
+                    
+                    // Print labels
                     std::cout << "First batch labels: " << std::endl;
                     for (int i = 0; i < batch_size; i++) {
-                        std::cout << d_batch_labels[i] << " ";
+                        for (int j = 0; j < 10; j++) {
+                            std::cout << (int)h_labels[i * 10 + j] << " ";
+                        }
+                        std::cout << std::endl;
                     }
-                    std::cout << std::endl;
+                    
+                    // Free host memory
+                    delete[] h_predictions;
+                    delete[] h_labels;
                 }
 
             }
