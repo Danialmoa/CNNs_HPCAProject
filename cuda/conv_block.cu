@@ -254,8 +254,6 @@ void ConvBlock::allocate_memory(int batch_size) {
     size_t conv_size = batch_size * out_channels * conv_output_height * conv_output_width;
     size_t input_size = batch_size * in_channels * input_height * input_width;
 
-    cudaError_t err;
-
     // Allocate memory for intermediate results
     CHECK_CUDA_ERROR(cudaMalloc(&d_conv_output_cache, conv_size * sizeof(float)));
     CHECK_CUDA_ERROR(cudaMalloc(&d_relu_output_cache, conv_size * sizeof(float)));

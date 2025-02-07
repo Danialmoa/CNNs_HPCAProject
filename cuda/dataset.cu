@@ -104,4 +104,6 @@ void DataSet::get_batch_data(float* d_batch_images, uint8_t* d_batch_labels,
                          image_copy_size, cudaMemcpyDeviceToDevice));
     CHECK_CUDA_ERROR(cudaMemcpy(d_batch_labels, d_labels + label_offset, 
                          label_copy_size, cudaMemcpyDeviceToDevice));
+
+    CHECK_CUDA_ERROR(cudaDeviceSynchronize());
 }
