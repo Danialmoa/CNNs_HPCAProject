@@ -149,8 +149,6 @@ __global__ void conv_backward_kernel(
 
     const float CLIP_VALUE = 1.0f;
     grad = fmaxf(fminf(grad, CLIP_VALUE), -CLIP_VALUE);
-
-    grad /= batch_size;
     
     // ReLU backward pass - zero out gradient where input was negative
     if (relu_output[output_idx] <= 0) {
