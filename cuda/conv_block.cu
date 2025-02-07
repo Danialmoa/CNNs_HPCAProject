@@ -37,6 +37,13 @@ __global__ void conv_forward_kernel(
     // Start with bias term
     float sum = biases[oc];
 
+    // Debug print for thread info
+    if (b == 0 && oc == 0 && h == 0 && w == 0) {
+        printf("Conv Forward: Processing first element\n");
+        printf("Input dims: [%d, %d, %d, %d]\n", batch_size, in_channels, height, width);
+        printf("Output dims: [%d, %d, %d, %d]\n", batch_size, out_channels, output_height, output_width);
+    }
+
     // Compute convolution
     for (int ic = 0; ic < in_channels; ic++) {
         for (int kh = 0; kh < kernel_size; kh++) {
@@ -50,6 +57,12 @@ __global__ void conv_forward_kernel(
                     int input_idx = ((b * in_channels + ic) * height + ih) * width + iw;
                     int weight_idx = ((oc * in_channels + ic) * kernel_size + kh) * kernel_size + kw;
                     sum += input[input_idx] * weights[weight_idx];
+
+                    // Debug print for first convolution operation
+                    if (b == 0 && oc == 0 && h == 0 && w == 0 && ic == 0 && kh == 0 && kw == 0) {
+                        printf("First conv operation: input[%d]=%f * weight[%d]=%f\n", 
+                               input_idx, input[input_idx], weight_idx, weights[weight_idx]);
+                    }
                 }
             }
         }
@@ -59,6 +72,12 @@ __global__ void conv_forward_kernel(
     int output_idx = ((b * out_channels + oc) * output_height + h) * output_width + w;
     conv_output[output_idx] = sum;
     relu_output[output_idx] = fmaxf(0.0f, sum);  // ReLU activation
+
+    // Debug print for first output
+    if (b == 0 && oc == 0 && h == 0 && w == 0) {
+        printf("First element: conv_output=%f, relu_output=%f\n", 
+               conv_output[output_idx], relu_output[output_idx]);
+    }
 }
 
 // Performs max pooling and tracks indices for backprop
@@ -82,6 +101,12 @@ __global__ void max_pool_forward_kernel(
     int h = idx / output_width;                           // Output height position
     int w = idx % output_width;                           // Output width position
     
+    // Debug print dimensions
+    if (b == 0 && c == 0 && h == 0 && w == 0) {
+        printf("MaxPool Forward: Input dims [%d, %d, %d, %d], Output dims [%d, %d, %d, %d]\n",
+               batch_size, channels, height, width, batch_size, channels, output_height, output_width);
+    }
+
     // Bounds checking
     if (b >= batch_size || c >= channels || h >= output_height || w >= output_width) 
         return;
@@ -102,6 +127,11 @@ __global__ void max_pool_forward_kernel(
                 if (val > max_val) {
                     max_val = val;
                     max_idx = idx;
+
+                    // Debug print for first pooling operation
+                    if (b == 0 && c == 0 && h == 0 && w == 0) {
+                        printf("New max found at [%d, %d]: %f\n", ih, iw, val);
+                    }
                 }
             }
         }
@@ -111,6 +141,11 @@ __global__ void max_pool_forward_kernel(
     int output_idx = ((b * channels + c) * output_height + h) * output_width + w;
     output[output_idx] = max_val;
     pool_indices[output_idx] = max_idx;
+
+    // Debug print first output
+    if (b == 0 && c == 0 && h == 0 && w == 0) {
+        printf("First pooling result: max_val=%f at index=%d\n", max_val, max_idx);
+    }
 }
 
 // Computes gradients for convolution layer
@@ -138,6 +173,13 @@ __global__ void conv_backward_kernel(
     int oc = blockIdx.y;
     int h = blockIdx.z / output_width;
     int w = blockIdx.z % output_width;
+
+    // Debug print dimensions
+    if (b == 0 && oc == 0 && h == 0 && w == 0) {
+        printf("Conv Backward: Processing gradients\n");
+        printf("Input dims: [%d, %d, %d, %d]\n", batch_size, in_channels, height, width);
+        printf("Output dims: [%d, %d, %d, %d]\n", batch_size, out_channels, output_height, output_width);
+    }
     
     // Bounds checking
     if (b >= batch_size || oc >= out_channels || h >= output_height || w >= output_width) 
@@ -149,11 +191,16 @@ __global__ void conv_backward_kernel(
     const float CLIP_VALUE = 1.0f;
     grad = fmaxf(fminf(grad, CLIP_VALUE), -CLIP_VALUE);
 
-     grad /= batch_size;
+    grad /= batch_size;
     
     // ReLU backward pass - zero out gradient where input was negative
     if (relu_output[output_idx] <= 0) {
         grad = 0;
+    }
+
+    // Debug print first gradient
+    if (b == 0 && oc == 0 && h == 0 && w == 0) {
+        printf("First gradient after ReLU: %f\n", grad);
     }
     
     // Accumulate bias gradients
@@ -170,6 +217,12 @@ __global__ void conv_backward_kernel(
                     int input_idx = ((b * in_channels + ic) * height + ih) * width + iw;
                     int weight_idx = ((oc * in_channels + ic) * kernel_size + kh) * kernel_size + kw;
                     
+                    // Debug print first update
+                    if (b == 0 && oc == 0 && ic == 0 && kh == 0 && kw == 0) {
+                        printf("First weight gradient update: %f * %f = %f\n", 
+                               input[input_idx], grad, input[input_idx] * grad);
+                    }
+
                     // Accumulate gradients atomically since multiple threads write to same locations
                     atomicAdd(&grad_weights[weight_idx], input[input_idx] * grad);
                     atomicAdd(&grad_input[input_idx], weights[weight_idx] * grad);
@@ -196,6 +249,13 @@ __global__ void max_pool_backward_kernel(
     int idx = blockIdx.z * blockDim.x + threadIdx.x;
     int h = idx / output_width;                           // Output height position
     int w = idx % output_width;                           // Output width position
+
+    // Debug print dimensions
+    if (b == 0 && c == 0 && h == 0 && w == 0) {
+        printf("MaxPool Backward: Input dims [%d, %d, %d, %d], Output dims [%d, %d, %d, %d]\n",
+               batch_size, channels, input_height, input_width, 
+               batch_size, channels, output_height, output_width);
+    }
     
     if (b >= batch_size || c >= channels || h >= output_height || w >= output_width) 
         return;
@@ -204,7 +264,13 @@ __global__ void max_pool_backward_kernel(
     int input_idx = pool_indices[output_idx];
     
     // Propagate gradient to max element's position
-    atomicAdd(&grad_input[input_idx], grad_output[output_idx]);
+    float grad = grad_output[output_idx];
+    atomicAdd(&grad_input[input_idx], grad);
+
+    // Debug print first gradient propagation
+    if (b == 0 && c == 0 && h == 0 && w == 0) {
+        printf("First maxpool gradient: Propagating %f to index %d\n", grad, input_idx);
+    }
 }
 
 // Constructor initializes layer parameters and allocates GPU memory
@@ -218,6 +284,16 @@ ConvBlock::ConvBlock(int in_channels, int out_channels, int kernel_size,
       d_weights(nullptr), d_biases(nullptr), d_cache(nullptr),
       d_conv_output_cache(nullptr), d_relu_output_cache(nullptr),
       d_pool_indices(nullptr), current_batch_size(0) {
+
+    std::cout << "Initializing ConvBlock with:" << std::endl;
+    std::cout << "in_channels: " << in_channels << std::endl;
+    std::cout << "out_channels: " << out_channels << std::endl;
+    std::cout << "kernel_size: " << kernel_size << std::endl;
+    std::cout << "stride: " << stride << std::endl;
+    std::cout << "padding: " << padding << std::endl;
+    std::cout << "pool_size: " << pool_size << std::endl;
+    std::cout << "pool_stride: " << pool_stride << std::endl;
+    std::cout << "learning_rate: " << learning_rate << std::endl;
 
     // Validate parameters
     if (kernel_size <= 0 || stride <= 0 || padding < 0 || pool_size <= 0 || pool_stride <= 0) {
@@ -239,6 +315,8 @@ ConvBlock::ConvBlock(int in_channels, int out_channels, int kernel_size,
     }
     std::fill(h_biases.begin(), h_biases.end(), 0.01f);
 
+    std::cout << "Weights initialized with std_dev: " << std_dev << std::endl;
+
     // Initialize optimizers
     weights_optimizer.init(out_channels * in_channels * kernel_size * kernel_size);
     bias_optimizer.init(out_channels);
@@ -253,6 +331,8 @@ ConvBlock::ConvBlock(int in_channels, int out_channels, int kernel_size,
     CHECK_CUDA_ERROR(cudaMemcpy(d_biases, h_biases.data(), 
                                h_biases.size() * sizeof(float), 
                                cudaMemcpyHostToDevice));
+
+    std::cout << "GPU memory allocated and initialized successfully" << std::endl;
 }
 
 // Destructor frees GPU memory
@@ -263,6 +343,8 @@ ConvBlock::~ConvBlock() {
 
 // Allocates GPU memory for intermediate results
 void ConvBlock::allocate_memory(int batch_size) {
+    std::cout << "Allocating memory for batch_size: " << batch_size << std::endl;
+
     // Free any existing allocations
     if (d_conv_output_cache) cudaFree(d_conv_output_cache);
     if (d_relu_output_cache) cudaFree(d_relu_output_cache);
@@ -280,6 +362,10 @@ void ConvBlock::allocate_memory(int batch_size) {
     pool_output_height = (conv_output_height - pool_size) / pool_stride + 1;
     pool_output_width = (conv_output_width - pool_size) / pool_stride + 1;
 
+    std::cout << "Calculated dimensions:" << std::endl;
+    std::cout << "conv_output: " << conv_output_height << "x" << conv_output_width << std::endl;
+    std::cout << "pool_output: " << pool_output_height << "x" << pool_output_width << std::endl;
+
     size_t conv_size = batch_size * out_channels * conv_output_height * conv_output_width;
     size_t input_size = batch_size * in_channels * input_height * input_width;
 
@@ -290,10 +376,12 @@ void ConvBlock::allocate_memory(int batch_size) {
     CHECK_CUDA_ERROR(cudaMalloc(&d_cache, input_size * sizeof(float)));
 
     current_batch_size = batch_size;
+    std::cout << "Memory allocation completed successfully" << std::endl;
 }
 
 // Frees all GPU memory
 void ConvBlock::free_memory() {
+    std::cout << "Freeing ConvBlock GPU memory" << std::endl;
     if (d_weights) {
         cudaFree(d_weights);
         d_weights = nullptr;
@@ -318,10 +406,14 @@ void ConvBlock::free_memory() {
         cudaFree(d_pool_indices);
         d_pool_indices = nullptr;
     }
+    std::cout << "All GPU memory freed successfully" << std::endl;
 }
 
 // Forward pass: convolution -> ReLU -> max pooling
 void ConvBlock::forward(const float* d_input, float* d_output, int batch_size, int height, int width) {
+    std::cout << "\nStarting forward pass with dimensions:" << std::endl;
+    std::cout << "batch_size: " << batch_size << ", height: " << height << ", width: " << width << std::endl;
+
     input_height = height;
     input_width = width;
     current_batch_size = batch_size;
@@ -338,6 +430,9 @@ void ConvBlock::forward(const float* d_input, float* d_output, int batch_size, i
                  out_channels, 
                  (conv_output_height * conv_output_width + 255) / 256);
     dim3 blockDim(256);
+
+    std::cout << "Launching convolution kernel with grid: " << 
+        gridDim.x << "x" << gridDim.y << "x" << gridDim.z << std::endl;
 
     conv_forward_kernel<<<gridDim, blockDim>>>(
         d_cache,
@@ -362,7 +457,7 @@ void ConvBlock::forward(const float* d_input, float* d_output, int batch_size, i
     cudaDeviceSynchronize();
     cudaError_t err = cudaGetLastError();
     if (err != cudaSuccess) {
-        printf("CUDA Error: %s\n", cudaGetErrorString(err));
+        printf("CUDA Error in conv forward: %s\n", cudaGetErrorString(err));
         return;
     }
 
@@ -371,6 +466,9 @@ void ConvBlock::forward(const float* d_input, float* d_output, int batch_size, i
                  out_channels, 
                  (pool_output_height * pool_output_width + 255) / 256);
     dim3 blockDimPooling(256);
+
+    std::cout << "Launching pooling kernel with grid: " << 
+        gridDimPooling.x << "x" << gridDimPooling.y << "x" << gridDimPooling.z << std::endl;
  
     max_pool_forward_kernel<<<gridDimPooling, blockDimPooling>>>(
         d_relu_output_cache,
@@ -391,13 +489,17 @@ void ConvBlock::forward(const float* d_input, float* d_output, int batch_size, i
     cudaDeviceSynchronize();
     err = cudaGetLastError();
     if (err != cudaSuccess) {
-        printf("CUDA Error: %s\n", cudaGetErrorString(err));
+        printf("CUDA Error in pooling forward: %s\n", cudaGetErrorString(err));
         return;
     }
+
+    std::cout << "Forward pass completed successfully" << std::endl;
 }
 
 // Backward pass: computes gradients and updates parameters
 void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int batch_size) {
+    std::cout << "\nStarting backward pass with batch_size: " << batch_size << std::endl;
+
     if (batch_size != current_batch_size) {
         throw std::invalid_argument("Batch size mismatch between forward and backward passes");
     }
@@ -413,6 +515,8 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
     CHECK_CUDA_ERROR(cudaMalloc(&d_grad_weights, weight_size * sizeof(float)));
     CHECK_CUDA_ERROR(cudaMalloc(&d_grad_biases, bias_size * sizeof(float)));
     
+    std::cout << "Allocated temporary gradient buffers" << std::endl;
+
     // Zero out gradients
     CHECK_CUDA_ERROR(cudaMemset(d_grad_weights, 0, weight_size * sizeof(float)));
     CHECK_CUDA_ERROR(cudaMemset(d_grad_biases, 0, bias_size * sizeof(float)));
@@ -427,6 +531,8 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
                     out_channels, 
                     (pool_output_height * pool_output_width + 255) / 256);
     dim3 blockDimPool(256);
+
+    std::cout << "Launching maxpool backward kernel" << std::endl;
     
     max_pool_backward_kernel<<<gridDimPool, blockDimPool>>>(
         d_grad_output,
@@ -447,6 +553,8 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
     dim3 gridDim(batch_size, out_channels, (total_spatial_elements + 255) / 256);
     dim3 blockDim(256);
 
+    std::cout << "Launching convolution backward kernel" << std::endl;
+
     conv_backward_kernel<<<gridDim, blockDim>>>(
         d_unpooled_grad, d_weights,
         d_grad_input, d_grad_weights, d_grad_biases,
@@ -460,10 +568,12 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
     cudaDeviceSynchronize();
     cudaError_t err = cudaGetLastError();
     if (err != cudaSuccess) {
-        printf("CUDA Error: %s\n", cudaGetErrorString(err));
+        printf("CUDA Error in backward pass: %s\n", cudaGetErrorString(err));
         return;
     }
     
+    std::cout << "Updating parameters using optimizers" << std::endl;
+
     // Update parameters using optimizers
     weights_optimizer.update(d_weights, d_grad_weights);
     bias_optimizer.update(d_biases, d_grad_biases);
@@ -472,4 +582,6 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
     CHECK_CUDA_ERROR(cudaFree(d_grad_weights));
     CHECK_CUDA_ERROR(cudaFree(d_grad_biases));
     CHECK_CUDA_ERROR(cudaFree(d_unpooled_grad));
+
+    std::cout << "Backward pass completed successfully" << std::endl;
 }

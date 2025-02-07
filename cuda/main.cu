@@ -70,7 +70,7 @@ int main() {
 
 
         // Training hyperparameters
-        const int batch_size = 64;
+        const int batch_size = 4;
         const int num_epochs = 10;
         const float learning_rate = 0.0005f;
         
@@ -111,7 +111,8 @@ int main() {
             float epoch_loss = 0.0f;
             float epoch_accuracy = 0.0f;
             auto epoch_start = std::chrono::high_resolution_clock::now();
-
+            // SAMPLE BATCH
+            num_batches = 1;
             for (int batch = 0; batch < num_batches; ++batch) {
                 // Get batch data
                 dataset.get_batch_data(d_batch_images, d_batch_labels, batch, batch_size);
@@ -162,14 +163,6 @@ int main() {
                     // Free host memory
                     delete[] h_predictions;
                     delete[] h_labels;
-
-                    // Print conv1 weights
-                    std::cout << "Conv1 weights: " << std::endl;
-                    for (int i = 0; i < 32; i++) {
-                        for (int j = 0; j < 3; j++) {
-                            std::cout << conv1.d_weights[i * 3 + j] << " ";
-                        }
-                    }
                 }
 
             }
