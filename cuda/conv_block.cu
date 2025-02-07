@@ -4,7 +4,6 @@
 #include <stdexcept>
 #include <iostream>
 
-#define DEBUG_PRINT 1
 
 // Performs forward convolution, applies ReLU activation
 __global__ void conv_forward_kernel(
@@ -256,7 +255,7 @@ void ConvBlock::allocate_memory(int batch_size) {
     size_t input_size = batch_size * in_channels * input_height * input_width;
 
     cudaError_t err;
-    
+
     // Allocate memory for intermediate results
     CHECK_CUDA_ERROR(cudaMalloc(&d_conv_output_cache, conv_size * sizeof(float)));
     CHECK_CUDA_ERROR(cudaMalloc(&d_relu_output_cache, conv_size * sizeof(float)));
