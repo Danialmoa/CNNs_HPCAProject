@@ -58,7 +58,8 @@ __global__ void conv_forward_kernel(
     // Write outputs
     int output_idx = ((b * out_channels + oc) * output_height + h) * output_width + w;
     conv_output[output_idx] = sum;
-    relu_output[output_idx] = fmaxf(0.0f, sum);  // ReLU activation
+    const float alpha = 0.01f;  // small slope for negative values
+    relu_output[output_idx] = sum > 0 ? sum : alpha * sum;
 }
 
 // Performs max pooling and tracks indices for backprop
@@ -146,9 +147,6 @@ __global__ void conv_backward_kernel(
     
     int output_idx = ((b * out_channels + oc) * output_height + h) * output_width + w;
     float grad = grad_output[output_idx];
-
-    const float CLIP_VALUE = 1.0f;
-    grad = fmaxf(fminf(grad, CLIP_VALUE), -CLIP_VALUE);
     
     // ReLU backward pass - zero out gradient where input was negative
     if (relu_output[output_idx] <= 0) {
