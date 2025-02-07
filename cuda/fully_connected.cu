@@ -57,11 +57,19 @@ __global__ void cross_entropy_loss_kernel(
     if (b >= batch_size) return;
     
     float batch_loss = 0.0f;
+    int true_class = -1;
+
     for (int i = 0; i < num_classes; i++) {
         if (labels[b * num_classes + i] == 1) {
             batch_loss = -logf(fmaxf(softmax_output[b * num_classes + i], 1e-10f));
+            true_class = i;
             break;
         }
+    }
+    
+    if (true_class >= 0) {
+        float pred = fmaxf(softmax_output[b * num_classes + true_class], 1e-10f);
+        batch_loss = -logf(pred);
     }
     atomicAdd(loss, batch_loss);
 }
