@@ -26,7 +26,7 @@ __global__ void conv_forward_kernel(
     int output_height,
     int output_width) {
     
-        __shared__ float shared_input[TILE_SIZE + BLOCK_SIZE - 1][TILE_SIZE + BLOCK_SIZE - 1];
+    __shared__ float shared_input[TILE_SIZE + BLOCK_SIZE - 1][TILE_SIZE + BLOCK_SIZE - 1];
     __shared__ float shared_weights[BLOCK_SIZE][BLOCK_SIZE];
 
     // Calculate output position
@@ -376,10 +376,10 @@ void ConvBlock::forward(const float* d_input, float* d_output, int batch_size, i
     dim3 block(BLOCK_SIZE, BLOCK_SIZE);
     dim3 grid(batch_size,
               out_channels,
-              ((output_height + TILE_SIZE - 1) / TILE_SIZE) * 
-              ((output_width + TILE_SIZE - 1) / TILE_SIZE));
+              ((height + TILE_SIZE - 1) / TILE_SIZE) * 
+              ((width + TILE_SIZE - 1) / TILE_SIZE));
 
-    conv_forward_kernel<<<gridDim, blockDim>>>(
+    conv_forward_kernel<<<grid, block>>>(
         d_cache,
         d_weights,
         d_biases,
