@@ -124,6 +124,8 @@ int main() {
                     for (int i = 0; i < batch_size; i++) {
                         std::cout << d_batch_labels[i] << " ";
                     }
+                    std::cout << std::endl;
+                }
                 
                 // Get batch data
                 dataset.get_batch_data(d_batch_images, d_batch_labels, batch, batch_size);
