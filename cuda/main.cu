@@ -5,31 +5,13 @@
 #include "include/fully_connected.cuh"
 #include "include/adam_optimizer.cuh"
 
-
-
-void print_memory_requirements(int batch_size) {
-    size_t total_memory = 0;
-    
-    // Calculate memory for each buffer
-    size_t images_memory = batch_size * 3 * 32 * 32 * sizeof(float);
-    size_t labels_memory = batch_size * 10 * sizeof(uint8_t);
-    size_t conv_output_memory = batch_size * 32 * 16 * 16 * sizeof(float);
-    size_t fc_output_memory = batch_size * 10 * sizeof(float);
-    size_t grad_memory = images_memory + conv_output_memory;
-    
-    total_memory = images_memory + labels_memory + conv_output_memory + 
-                   fc_output_memory + grad_memory;
-    
-    std::cout << "Memory requirements for batch size " << batch_size << ":" << std::endl;
-    std::cout << "Images: " << (images_memory / 1024.0 / 1024.0) << " MB" << std::endl;
-    std::cout << "Labels: " << (labels_memory / 1024.0 / 1024.0) << " MB" << std::endl;
-    std::cout << "Conv output: " << (conv_output_memory / 1024.0 / 1024.0) << " MB" << std::endl;
-    std::cout << "FC output: " << (fc_output_memory / 1024.0 / 1024.0) << " MB" << std::endl;
-    std::cout << "Gradients: " << (grad_memory / 1024.0 / 1024.0) << " MB" << std::endl;
-    std::cout << "Total: " << (total_memory / 1024.0 / 1024.0) << " MB" << std::endl;
+void sync_device() {
+    cudaError_t error = cudaDeviceSynchronize();
+    if (error != cudaSuccess) {
+        throw std::runtime_error("CUDA synchronization failed: " + 
+                               std::string(cudaGetErrorString(error)));
+    }
 }
-
-
 
 // Helper function to calculate accuracy
 __global__ void calculate_accuracy_kernel(
