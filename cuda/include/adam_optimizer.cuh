@@ -19,7 +19,7 @@ private:
     void free_memory();
 
 public:
-    AdamOptimizer(float lr = 0.001f, float beta1 = 0.9f, 
+    AdamOptimizer(float lr = 0.0005f, float beta1 = 0.9f, 
                   float beta2 = 0.999f, float eps = 1e-8f);
     ~AdamOptimizer();
 
