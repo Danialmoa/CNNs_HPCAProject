@@ -322,7 +322,7 @@ void ConvBlock::forward(const float* d_input, float* d_output, int batch_size, i
     current_batch_size = batch_size;
     
     // Allocate memory for this forward pass
-    // allocate_memory(batch_size);
+    allocate_memory(batch_size);
 
     // Cache input for backward pass
     size_t input_size = batch_size * in_channels * height * width * sizeof(float);
