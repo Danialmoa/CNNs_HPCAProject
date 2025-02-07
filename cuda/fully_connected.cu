@@ -85,7 +85,7 @@ __global__ void backward_kernel(
     if (b >= batch_size || c >= num_classes) return;
     
     int idx = b * num_classes + c;
-    float grad = (softmax_output[idx] - labels[idx])
+    float grad = (softmax_output[idx] - labels[idx]);
     
     // Gradient for biases
     atomicAdd(&grad_biases[c], grad);
