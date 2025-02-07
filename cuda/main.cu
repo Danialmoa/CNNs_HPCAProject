@@ -128,39 +128,6 @@ int main() {
                 fc.backward(d_batch_labels, d_grad_conv_output, batch_size);
                 conv1.backward(d_grad_conv_output, d_grad_input, batch_size);
 
-                /// PRINT FIRST BATCH PREDICTIONS AND LABELS
-                if (batch == 0 || batch == 1) {
-                    // Allocate host memory
-                    float* h_predictions = new float[batch_size * 10];  // 10 classes
-                    uint8_t* h_labels = new uint8_t[batch_size * 10];
-                    
-                    // Copy from device to host
-                    cudaMemcpy(h_predictions, d_fc_output, batch_size * 10 * sizeof(float), cudaMemcpyDeviceToHost);
-                    cudaMemcpy(h_labels, d_batch_labels, batch_size * 10 * sizeof(uint8_t), cudaMemcpyDeviceToHost);
-                    
-                    // Print predictions
-                    std::cout << "First batch predictions: " << std::endl;
-                    for (int i = 0; i < batch_size; i++) {
-                        for (int j = 0; j < 10; j++) {  // Print all 10 class probabilities
-                            std::cout << h_predictions[i * 10 + j] << " ";
-                        }
-                        std::cout << std::endl;
-                    }
-                    
-                    // Print labels
-                    std::cout << "First batch labels: " << std::endl;
-                    for (int i = 0; i < batch_size; i++) {
-                        for (int j = 0; j < 10; j++) {
-                            std::cout << (int)h_labels[i * 10 + j] << " ";
-                        }
-                        std::cout << std::endl;
-                    }
-                    
-                    // Free host memory
-                    delete[] h_predictions;
-                    delete[] h_labels;
-                }
-
             }
 
             auto epoch_end = std::chrono::high_resolution_clock::now();
