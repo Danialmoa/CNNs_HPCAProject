@@ -100,7 +100,7 @@ int main() {
         
         // Initialize dataset
         std::cout << "Initializing dataset..." << std::endl;
-        DataSet dataset("../../data");
+        DataSet dataset("../data");
         dataset.load_data();
         dataset.to_gpu();
 
