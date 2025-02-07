@@ -30,18 +30,6 @@ void print_memory_requirements(int batch_size) {
 }
 
 
-void check_gpu_memory(const char* checkpoint) {
-    size_t free_byte, total_byte;
-    CHECK_CUDA_ERROR(cudaMemGetInfo(&free_byte, &total_byte));
-    float free_gb = free_byte / 1024.0 / 1024.0 / 1024.0;
-    float total_gb = total_byte / 1024.0 / 1024.0 / 1024.0;
-    float used_gb = total_gb - free_gb;
-    
-    std::cout << "GPU Memory at " << checkpoint << ":" << std::endl;
-    std::cout << "Free: " << free_gb << " GB" << std::endl;
-    std::cout << "Used: " << used_gb << " GB" << std::endl;
-    std::cout << "Total: " << total_gb << " GB" << std::endl;
-}
 
 // Helper function to calculate accuracy
 __global__ void calculate_accuracy_kernel(
@@ -131,18 +119,40 @@ int main() {
         FullyConnectedLayer fc(32 * 16 * 16, 10, learning_rate);  // input: 8192, output: 10
 
         // Allocate GPU memory for data and intermediate results
-        float *d_batch_images;
-        uint8_t *d_batch_labels;
-        float *d_conv_output, *d_fc_output;
-        float *d_grad_conv_output, *d_grad_input;
+        float *d_batch_images = nullptr;
+        uint8_t *d_batch_labels = nullptr;
+        float *d_conv_output = nullptr;
+        float *d_fc_output = nullptr;
+        float *d_grad_conv_output = nullptr;
+        float *d_grad_input = nullptr;
 
-        CHECK_CUDA_ERROR(cudaMalloc(&d_batch_images, batch_size * 3 * 32 * 32 * sizeof(float)));
-        CHECK_CUDA_ERROR(cudaMalloc(&d_batch_labels, batch_size * 10 * sizeof(uint8_t)));
-        CHECK_CUDA_ERROR(cudaMalloc(&d_conv_output, batch_size * 32 * 16 * 16 * sizeof(float)));
-        CHECK_CUDA_ERROR(cudaMalloc(&d_fc_output, batch_size * 10 * sizeof(float)));
-        CHECK_CUDA_ERROR(cudaMalloc(&d_grad_conv_output, batch_size * 32 * 16 * 16 * sizeof(float)));
-        CHECK_CUDA_ERROR(cudaMalloc(&d_grad_input, batch_size * 3 * 32 * 32 * sizeof(float)));
-
+        // Function to allocate memory
+        auto allocate_memory = [&]() {
+            CHECK_CUDA_ERROR(cudaMalloc(&d_batch_images, batch_size * 3 * 32 * 32 * sizeof(float)));
+            CHECK_CUDA_ERROR(cudaMalloc(&d_batch_labels, batch_size * 10 * sizeof(uint8_t)));
+            CHECK_CUDA_ERROR(cudaMalloc(&d_conv_output, batch_size * 32 * 16 * 16 * sizeof(float)));
+            CHECK_CUDA_ERROR(cudaMalloc(&d_fc_output, batch_size * 10 * sizeof(float)));
+            CHECK_CUDA_ERROR(cudaMalloc(&d_grad_conv_output, batch_size * 32 * 16 * 16 * sizeof(float)));
+            CHECK_CUDA_ERROR(cudaMalloc(&d_grad_input, batch_size * 3 * 32 * 32 * sizeof(float)));
+        };
+        auto free_memory = [&]() {
+            if (d_batch_images) CHECK_CUDA_ERROR(cudaFree(d_batch_images));
+            if (d_batch_labels) CHECK_CUDA_ERROR(cudaFree(d_batch_labels));
+            if (d_conv_output) CHECK_CUDA_ERROR(cudaFree(d_conv_output));
+            if (d_fc_output) CHECK_CUDA_ERROR(cudaFree(d_fc_output));
+            if (d_grad_conv_output) CHECK_CUDA_ERROR(cudaFree(d_grad_conv_output));
+            if (d_grad_input) CHECK_CUDA_ERROR(cudaFree(d_grad_input));
+            
+            d_batch_images = nullptr;
+            d_batch_labels = nullptr;
+            d_conv_output = nullptr;
+            d_fc_output = nullptr;
+            d_grad_conv_output = nullptr;
+            d_grad_input = nullptr;
+        };
+        // Initial allocation
+        allocate_memory();
+        
         // Training loop
         std::cout << "Starting training..." << std::endl;
         for (int epoch = 0; epoch < num_epochs; ++epoch) {
@@ -152,7 +162,7 @@ int main() {
 
             for (int batch = 0; batch < num_batches; ++batch) {
                 std::cout << "Batch " << batch << " of " << num_batches << std::endl;
-                check_gpu_memory("start of batch");
+
                 // Clear CUDA cache before each batch
                 CHECK_CUDA_ERROR(cudaDeviceSynchronize());
 
@@ -184,7 +194,6 @@ int main() {
                               << " - Accuracy: " << batch_accuracy * 100 << "%" 
                               << std::flush;
                 }
-                check_gpu_memory("end of batch");
                 CHECK_CUDA_ERROR(cudaDeviceSynchronize());
             }
 
