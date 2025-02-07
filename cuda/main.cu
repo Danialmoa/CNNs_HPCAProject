@@ -113,20 +113,6 @@ int main() {
             auto epoch_start = std::chrono::high_resolution_clock::now();
 
             for (int batch = 0; batch < num_batches; ++batch) {
-                /// PRINT FIRST BATCH PREDICTIONS AND LABELS
-                if (batch == 0) {
-                    std::cout << "First batch predictions: " << std::endl;
-                    for (int i = 0; i < batch_size; i++) {
-                        std::cout << d_fc_output[i] << " ";
-                    }
-                    std::cout << std::endl;
-                    std::cout << "First batch labels: " << std::endl;
-                    for (int i = 0; i < batch_size; i++) {
-                        std::cout << d_batch_labels[i] << " ";
-                    }
-                    std::cout << std::endl;
-                }
-                
                 // Get batch data
                 dataset.get_batch_data(d_batch_images, d_batch_labels, batch, batch_size);
 
@@ -144,6 +130,20 @@ int main() {
                 // Backward pass
                 fc.backward(d_batch_labels, d_grad_conv_output, batch_size);
                 conv1.backward(d_grad_conv_output, d_grad_input, batch_size);
+
+                /// PRINT FIRST BATCH PREDICTIONS AND LABELS
+                if (batch == 0) {
+                    std::cout << "First batch predictions: " << std::endl;
+                    for (int i = 0; i < batch_size; i++) {
+                        std::cout << d_fc_output[i] << " ";
+                    }
+                    std::cout << std::endl;
+                    std::cout << "First batch labels: " << std::endl;
+                    for (int i = 0; i < batch_size; i++) {
+                        std::cout << d_batch_labels[i] << " ";
+                    }
+                    std::cout << std::endl;
+                }
 
             }
 
