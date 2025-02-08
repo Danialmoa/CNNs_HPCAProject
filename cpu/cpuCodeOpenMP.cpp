@@ -553,9 +553,9 @@ class Train {
                 
                     // Forward pass
                     auto conv_out_1 = conv_layer_1.forward(batch_images, batch_size, 32, 32);
-                    // auto conv_out_2 = conv_layer_2.forward(conv_out_1, batch_size, 16, 16);
-                    // auto conv_out_3 = conv_layer_3.forward(conv_out_2, batch_size, 8, 8);
-                    auto predictions = fully_connected_layer.forward(conv_out_1, batch_size);
+                    auto conv_out_2 = conv_layer_2.forward(conv_out_1, batch_size, 16, 16);
+                    auto conv_out_3 = conv_layer_3.forward(conv_out_2, batch_size, 8, 8);
+                    auto predictions = fully_connected_layer.forward(conv_out_3, batch_size);
                 
                     // Compute metrics
                     float batch_loss = fully_connected_layer.compute_loss(batch_labels);
@@ -566,9 +566,9 @@ class Train {
 
                     // Backward pass
                     auto fc_grad = fully_connected_layer.backward(batch_labels, batch_size);
-                    auto grad_1 = conv_layer_1.backward(fc_grad);
-                    auto grad_2 = conv_layer_2.backward(grad_1);
-                    auto grad_3 = conv_layer_3.backward(grad_2);
+                    auto grad_3 = conv_layer_3.backward(fc_grad);
+                    auto grad_2 = conv_layer_2.backward(grad_3);
+                    auto grad_1 = conv_layer_1.backward(grad_2);
                 }
                 epoch_loss /= num_batches;
                 epoch_accuracy /= num_batches;
@@ -591,7 +591,7 @@ int main(int argc, char* argv[]) {
         if (argc > 1) {
             batch_size = std::stoi(argv[1]);
         }
-        float learning_rate = 0.0005;
+        float learning_rate = 0.005;
         int num_epochs = 10;
 
 
