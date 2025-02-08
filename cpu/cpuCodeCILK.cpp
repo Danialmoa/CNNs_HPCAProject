@@ -7,10 +7,12 @@
 #include <cstdint>
 #include <array>
 #include <limits>
-#include <omp.h>
 #include <cmath>
 #include <random>
 #include <chrono>
+#include <cilk/cilk.h>
+#include <cilk/reducer_opadd.h>
+#include <cilk/reducer_max.h>
 
 
 class DataSet {
@@ -33,12 +35,11 @@ class DataSet {
             }
 
         void load_data() {
-            #pragma omp parallel for schedule(static) num_threads(5)
-            for (int i = 0; i < NUM_BATCHES; i++) {
+            cilk_for (int i = 0; i < NUM_BATCHES; i++) {
                 std::string data_path = data_path_root + "/data_batch_" + std::to_string(i + 1) + ".bin";
                 std::ifstream file(data_path, std::ios::binary);
                 if (!file.is_open()) {
-                    #pragma omp critical
+                    cilk_critical
                     throw std::runtime_error("Error: Could not open file " + data_path);
                     continue;
                 }
@@ -58,8 +59,10 @@ class DataSet {
                                 uint8_t pixel;
                                 file.read(reinterpret_cast<char*>(&pixel), 1);
                                 images[image_offset + k * 32 * 32 + h * 32 + w] = pixel / 255.0f;
-                                const float CIFAR_MEANS[3] = {0.4914f, 0.4822f, 0.4465f};
-                                const float CIFAR_STDS[3] = {0.2470f, 0.2435f, 0.2616f};
+
+                                cilk::array<float, 3> CIFAR_MEANS = {0.4914f, 0.4822f, 0.4465f};
+                                cilk::array<float, 3> CIFAR_STDS = {0.2470f, 0.2435f, 0.2616f};
+
                                 images[image_offset + k * 32 * 32 + h * 32 + w] = 
                                     (pixel / 255.0f - CIFAR_MEANS[k]) / CIFAR_STDS[k];
                             }
@@ -129,8 +132,7 @@ public:
         float alpha_t = learning_rate * std::sqrt(1.0f - std::pow(beta2, t)) / 
                        (1.0f - std::pow(beta1, t));
         
-        #pragma omp parallel for
-        for (size_t i = 0; i < params.size(); i++) {
+        cilk_for (size_t i = 0; i < params.size(); i++) {
             float scaled_grad = gradients[i];
             m[i] = beta1 * m[i] + (1.0f - beta1) * scaled_grad;
             v[i] = beta2 * v[i] + (1.0f - beta2) * scaled_grad * scaled_grad;
@@ -212,9 +214,8 @@ class ConvBlock {
             std::vector<float> output(batch_size * out_channels * pool_output_height * pool_output_width, 0.0f);
             pool_indices.resize(output.size());
 
-            #pragma omp parallel for collapse(4)
-            for (int b = 0; b < batch_size; ++b) {
-                for (int oc = 0; oc < out_channels; ++oc) {
+            cilk_for (int b = 0; b < batch_size; ++b) {
+                cilk_for (int oc = 0; oc < out_channels; ++oc) {
                     for (int ph = 0; ph < pool_output_height; ++ph) {
                         for (int pw = 0; pw < pool_output_width; ++pw) {
                             float max_pool_val = -std::numeric_limits<float>::infinity();
@@ -283,13 +284,14 @@ class ConvBlock {
         int pool_output_width = (conv_width - pool_size) / pool_stride + 1;
 
 
-        #pragma omp parallel for collapse(4)
-        for (int b = 0; b < batch_size; ++b) {
-            for (int oc = 0; oc < out_channels; ++oc) {
-                for (int h = 0; h < conv_height; ++h) {
+        cilk_for (int b = 0; b < batch_size; ++b) {
+            cilk_for (int oc = 0; oc < out_channels; ++oc) {
+                cilk_for (int h = 0; h < conv_height; ++h) {
                     for (int w = 0; w < conv_width; ++w) {
                         int conv_idx = helper_feat_idx(b, oc, h, w, out_channels, conv_height, conv_width);
-                        
+                        cilk::reducer_opadd<float> bias_grad_reducer(0.0f);
+                        cilk::reducer_opadd<float> weight_grad_reducer(0.0f);
+                        cilk::reducer_opadd<float> input_grad_reducer(0.0f);
                         // Get pooling gradient
                         float pool_grad = 0.0f;
                         int pool_h = h / pool_stride;
@@ -322,18 +324,15 @@ class ConvBlock {
                                         int input_idx = helper_feat_idx(b, ic, ih, iw, in_channels, input_height, input_width);
                                         int weight_idx = helper_weight_idx(oc, ic, kh, kw);
 
-                                        #pragma omp atomic
-                                        input_gradients[input_idx] += weights[weight_idx] * relu_grad;
+                                        input_grad_reducer += weights[weight_idx] * relu_grad;
 
-                                        #pragma omp atomic
-                                        weight_gradients[weight_idx] += cache[input_idx] * relu_grad;
+                                        weight_grad_reducer += cache[input_idx] * relu_grad;
                                     }
                                 }
                             }
                         }
 
-                        #pragma omp atomic
-                        bias_gradients[oc] += relu_grad;
+                        bias_grad_reducer += relu_grad;
                     }
                 }
             }
@@ -390,14 +389,12 @@ class FullyConnectedLayer {
             std::vector<float> output(batch_size * num_classes);
 
             input_cache = input;
-            #pragma omp parallel for
-            for (int b = 0; b < batch_size; ++b) {
+            cilk_for (int b = 0; b < batch_size; ++b) {
                 // Fully connected forward
                 std::vector<float> fc_output(num_classes);
                 for (int i = 0; i < num_classes; ++i) {
                     float sum = biases[i];
-                    #pragma omp simd reduction(+:sum)
-                    for (int j = 0; j < in_channels; ++j) {
+                    cilk_for (int j = 0; j < in_channels; ++j) {
                         sum += input[b * in_channels + j] * weights[i * in_channels + j];
                     }
                     fc_output[i] = sum;
@@ -405,21 +402,18 @@ class FullyConnectedLayer {
 
                 // Softmax forward (with numerical stability)
                 float max_val = -std::numeric_limits<float>::infinity();
-                #pragma omp simd reduction(max:max_val)
-                for (int j = 0; j < num_classes; ++j) {
+                cilk_for (int j = 0; j < num_classes; ++j) {
                     max_val = std::max(max_val, fc_output[j]);
                 }
 
                 float sum = 0.0f;
-                #pragma omp simd reduction(+:sum)
-                for (int j = 0; j < num_classes; ++j) {
+                cilk_for (int j = 0; j < num_classes; ++j) {
                     output[b * num_classes + j] = std::exp(fc_output[j] - max_val);
                     sum += output[b * num_classes + j];
                 }
 
                 const float inv_sum = 1.0f / sum;
-                #pragma omp simd
-                for (int j = 0; j < num_classes; ++j) {
+                cilk_for (int j = 0; j < num_classes; ++j) {
                     const int idx = b * num_classes + j;
                     output[idx] *= inv_sum;
                     output_cache[idx] = output[idx];
@@ -434,25 +428,23 @@ class FullyConnectedLayer {
             std::vector<float> weight_gradients(weights.size(), 0.0f);
             std::vector<float> bias_gradients(biases.size(), 0.0f);
 
-            #pragma omp parallel for collapse(2)
-            for (int b = 0; b < batch_size; ++b) {
+            cilk_for (int b = 0; b < batch_size; ++b) {
                 for (int i = 0; i < num_classes; ++i) {
                     const float grad = (output_cache[b * num_classes + i] - labels[b][i]) / batch_size;
 
                     // Accumulate bias gradients
-                    #pragma omp atomic
-                    bias_gradients[i] += grad;
+                    cilk::reducer_opadd<float> bias_grad_reducer(0.0f);
+                    bias_grad_reducer += grad;
 
                     // Compute weight gradients
                     for (int j = 0; j < in_channels; ++j) {
                         const int weight_idx = i * in_channels + j;
                         const int input_idx = b * in_channels + j;
                         
-                        #pragma omp atomic
-                        weight_gradients[weight_idx] += grad * input_cache[input_idx];
+                        cilk::reducer_opadd<float> weight_grad_reducer(0.0f);
+                        weight_grad_reducer += grad * input_cache[input_idx];
                         
-                        #pragma omp atomic
-                        grad_input[input_idx] += grad * weights[weight_idx];
+                        grad_input_reducer += grad * weights[weight_idx];
                     }   
                 }
             }
@@ -467,8 +459,7 @@ class FullyConnectedLayer {
             const float epsilon = 1e-10f;
             const int batch_size = labels.size();
 
-            #pragma omp parallel for collapse(2) reduction(+:loss)
-            for (int b = 0; b < batch_size; ++b) {
+            cilk_for (int b = 0; b < batch_size; ++b) {
                 for (int j = 0; j < num_classes; ++j) {
                     if (labels[b][j] == 1) {
                         const int idx = b * num_classes + j;
@@ -498,8 +489,7 @@ class Train {
                                int batch_size) {
             int correct = 0;
             
-            #pragma omp parallel for reduction(+:correct)
-            for (int b = 0; b < batch_size; ++b) {
+            cilk_for (int b = 0; b < batch_size; ++b) {
                 int predicted_class = 0;
                 float max_prob = predictions[b * 10];
                 for (int i = 1; i < 10; ++i) {
