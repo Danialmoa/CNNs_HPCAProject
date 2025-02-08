@@ -68,8 +68,8 @@ int main() {
 
 
         // Training hyperparameters
-        const int batch_size = 256;
-        const int num_epochs = 50;
+        const int batch_size = 512;
+        const int num_epochs = 5;
         const float learning_rate = 0.01f;
         
         // Initialize dataset
