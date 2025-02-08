@@ -165,44 +165,113 @@ __global__ void conv_backward_kernel(
     int output_height,
     int output_width) {
     
-    // Calculate position
-    int b = blockIdx.x;
-    int oc = blockIdx.y;
-    int h = blockIdx.z / output_width;
-    int w = blockIdx.z % output_width;
+    __shared__ float s_grad[TILE_SIZE][TILE_SIZE];
+    __shared__ float s_input[TILE_SIZE + BLOCK_SIZE - 1][TILE_SIZE + BLOCK_SIZE - 1];
+    __shared__ float s_weights[BLOCK_SIZE][BLOCK_SIZE];
+    __shared__ float s_partial_grad_weights[BLOCK_SIZE][BLOCK_SIZE];
     
-    // Bounds checking
-    if (b >= batch_size || oc >= out_channels || h >= output_height || w >= output_width) 
-        return;
+    // Thread indices
+    int tx = threadIdx.x;
+    int ty = threadIdx.y;
     
-    int output_idx = ((b * out_channels + oc) * output_height + h) * output_width + w;
-    float grad = grad_output[output_idx];
+    // Block indices
+    int b = blockIdx.x;  // batch
+    int oc = blockIdx.y; // output channel
+    int tile_idx = blockIdx.z;
     
-    // ReLU backward pass - zero out gradient where input was negative
-    if (relu_output[output_idx] <= 0) {
-        grad = 0;
+    // Calculate tile position
+    int tile_h = (tile_idx / ((width + TILE_SIZE - 1) / TILE_SIZE)) * TILE_SIZE;
+    int tile_w = (tile_idx % ((width + TILE_SIZE - 1) / TILE_SIZE)) * TILE_SIZE;
+    int h = tile_h + ty;
+    int w = tile_w + tx;
+    
+    // Initialize shared memory
+    if (tx < BLOCK_SIZE && ty < BLOCK_SIZE) {
+        s_partial_grad_weights[ty][tx] = 0.0f;
     }
-
-    // Accumulate bias gradients
-    atomicAdd(&grad_biases[oc], grad);
     
-    // Compute weight and input gradients
+    // Load gradient and apply ReLU derivative
+    if (h < output_height && w < output_width && b < batch_size) {
+        int output_idx = ((b * out_channels + oc) * output_height + h) * output_width + w;
+        s_grad[ty][tx] = grad_output[output_idx] * (relu_output[output_idx] > 0 ? 1.0f : 0.0f);
+    } else {
+        s_grad[ty][tx] = 0.0f;
+    }
+    
+    __syncthreads();
+    
+    // Process each input channel
     for (int ic = 0; ic < in_channels; ic++) {
-        for (int kh = 0; kh < kernel_size; kh++) {
-            for (int kw = 0; kw < kernel_size; kw++) {
-                int ih = h * stride - padding + kh;
-                int iw = w * stride - padding + kw;
+        // Load input tile into shared memory
+        for (int i = ty; i < TILE_SIZE + kernel_size - 1; i += BLOCK_SIZE) {
+            for (int j = tx; j < TILE_SIZE + kernel_size - 1; j += BLOCK_SIZE) {
+                int ih = tile_h * stride - padding + i;
+                int iw = tile_w * stride - padding + j;
                 
-                if (ih >= 0 && ih < height && iw >= 0 && iw < width) {
-                    int input_idx = ((b * in_channels + ic) * height + ih) * width + iw;
-                    int weight_idx = ((oc * in_channels + ic) * kernel_size + kh) * kernel_size + kw;
-
-                    // Accumulate gradients atomically since multiple threads write to same locations
-                    atomicAdd(&grad_weights[weight_idx], input[input_idx] * grad);
-                    atomicAdd(&grad_input[input_idx], weights[weight_idx] * grad);
+                if (ih >= 0 && ih < height && iw >= 0 && iw < width && b < batch_size) {
+                    s_input[i][j] = input[((b * in_channels + ic) * height + ih) * width + iw];
+                } else {
+                    s_input[i][j] = 0.0f;
                 }
             }
         }
+        
+        // Load weights into shared memory
+        if (ty < kernel_size && tx < kernel_size) {
+            s_weights[ty][tx] = weights[((oc * in_channels + ic) * kernel_size + ty) * kernel_size + tx];
+        }
+        
+        __syncthreads();
+        
+        // Compute gradients
+        if (h < output_height && w < output_width && b < batch_size) {
+            // Compute input gradients
+            for (int kh = 0; kh < kernel_size; kh++) {
+                for (int kw = 0; kw < kernel_size; kw++) {
+                    int ih = h * stride - padding + kh;
+                    int iw = w * stride - padding + kw;
+                    
+                    if (ih >= 0 && ih < height && iw >= 0 && iw < width) {
+                        int input_idx = ((b * in_channels + ic) * height + ih) * width + iw;
+                        atomicAdd(&grad_input[input_idx], 
+                                s_grad[ty][tx] * s_weights[kh][kw]);
+                    }
+                }
+            }
+            
+            // Accumulate weight gradients in shared memory
+            for (int kh = 0; kh < kernel_size; kh++) {
+                for (int kw = 0; kw < kernel_size; kw++) {
+                    int ih = h * stride - padding + kh;
+                    int iw = w * stride - padding + kw;
+                    
+                    if (ih >= 0 && ih < height && iw >= 0 && iw < width) {
+                        s_partial_grad_weights[kh][kw] += s_input[ih - tile_h + padding][iw - tile_w + padding] * s_grad[ty][tx];
+                    }
+                }
+            }
+        }
+        
+        __syncthreads();
+    }
+    
+    // Accumulate weight gradients globally
+    if (ty < kernel_size && tx < kernel_size) {
+        int weight_idx = ((oc * in_channels) * kernel_size + ty) * kernel_size + tx;
+        atomicAdd(&grad_weights[weight_idx], s_partial_grad_weights[ty][tx]);
+    }
+    
+    // Accumulate bias gradients
+    if (tx == 0 && ty == 0) {
+        float bias_grad = 0.0f;
+        for (int i = 0; i < TILE_SIZE; i++) {
+            for (int j = 0; j < TILE_SIZE; j++) {
+                if (tile_h + i < output_height && tile_w + j < output_width) {
+                    bias_grad += s_grad[i][j];
+                }
+            }
+        }
+        atomicAdd(&grad_biases[oc], bias_grad);
     }
 }
 
@@ -438,7 +507,6 @@ void ConvBlock::forward(const float* d_input, float* d_output, int batch_size, i
 
 // Backward pass: computes gradients and updates parameters
 void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int batch_size) {
-
     if (batch_size != current_batch_size) {
         throw std::invalid_argument("Batch size mismatch between forward and backward passes");
     }
@@ -447,28 +515,36 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
     size_t weight_size = out_channels * in_channels * kernel_size * kernel_size;
     size_t bias_size = out_channels;
     size_t input_size = batch_size * in_channels * input_height * input_width;
- 
+    
+    // Create CUDA streams for parallel execution
+    cudaStream_t stream1, stream2, stream3;
+    CHECK_CUDA_ERROR(cudaStreamCreate(&stream1));
+    CHECK_CUDA_ERROR(cudaStreamCreate(&stream2));
+    CHECK_CUDA_ERROR(cudaStreamCreate(&stream3));
+    
     // Allocate temporary gradient buffers
     float *d_grad_weights, *d_grad_biases;
     CHECK_CUDA_ERROR(cudaMalloc(&d_grad_weights, weight_size * sizeof(float)));
     CHECK_CUDA_ERROR(cudaMalloc(&d_grad_biases, bias_size * sizeof(float)));
     
     // Zero out gradients
-    CHECK_CUDA_ERROR(cudaMemset(d_grad_weights, 0, weight_size * sizeof(float)));
-    CHECK_CUDA_ERROR(cudaMemset(d_grad_biases, 0, bias_size * sizeof(float)));
-    CHECK_CUDA_ERROR(cudaMemset(d_grad_input, 0, input_size * sizeof(float)));
+    CHECK_CUDA_ERROR(cudaMemsetAsync(d_grad_weights, 0, weight_size * sizeof(float), stream1));
+    CHECK_CUDA_ERROR(cudaMemsetAsync(d_grad_biases, 0, bias_size * sizeof(float), stream2));
+    CHECK_CUDA_ERROR(cudaMemsetAsync(d_grad_input, 0, input_size * sizeof(float), stream3));
 
+    // Allocate and initialize unpooled gradients
     float* d_unpooled_grad;
     size_t conv_output_size = batch_size * out_channels * conv_output_height * conv_output_width;
     CHECK_CUDA_ERROR(cudaMalloc(&d_unpooled_grad, conv_output_size * sizeof(float)));
-    CHECK_CUDA_ERROR(cudaMemset(d_unpooled_grad, 0, conv_output_size * sizeof(float)));
+    CHECK_CUDA_ERROR(cudaMemsetAsync(d_unpooled_grad, 0, conv_output_size * sizeof(float), stream1));
     
+    // Launch max pooling backward
     dim3 gridDimPool(batch_size, 
                     out_channels, 
-                    (pool_output_height * pool_output_width + 255) / 256);
-    dim3 blockDimPool(256);
+                    (pool_output_height * pool_output_width + MAX_THREADS - 1) / MAX_THREADS);
+    dim3 blockDimPool(MAX_THREADS);
     
-    max_pool_backward_kernel<<<gridDimPool, blockDimPool>>>(
+    max_pool_backward_kernel<<<gridDimPool, blockDimPool, 0, stream1>>>(
         d_grad_output,
         d_unpooled_grad,
         d_pool_indices,
@@ -479,37 +555,56 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
         pool_output_height,
         pool_output_width
     );
-    CHECK_LAST_CUDA_ERROR();
- 
     
-    // Launch backward kernel
-    int total_spatial_elements = conv_output_height * conv_output_width;
-    dim3 gridDim(batch_size, out_channels, (total_spatial_elements + 255) / 256);
-    dim3 blockDim(256);
-
-    conv_backward_kernel<<<gridDim, blockDim>>>(
-        d_unpooled_grad, d_weights,
-        d_grad_input, d_grad_weights, d_grad_biases,
-        d_cache, d_relu_output_cache,
-        batch_size, in_channels, out_channels,
-        input_height, input_width, kernel_size, stride, padding,
-        conv_output_height, conv_output_width
+    // Launch convolution backward
+    dim3 blockDim(BLOCK_SIZE, BLOCK_SIZE);
+    dim3 gridDim(
+        batch_size,
+        out_channels,
+        ((conv_output_height + TILE_SIZE - 1) / TILE_SIZE) * 
+        ((conv_output_width + TILE_SIZE - 1) / TILE_SIZE)
     );
 
-    // Synchronize and check for errors
-    cudaDeviceSynchronize();
+    conv_backward_kernel<<<gridDim, blockDim, 0, stream1>>>(
+        d_unpooled_grad,
+        d_weights,
+        d_grad_input,
+        d_grad_weights,
+        d_grad_biases,
+        d_cache,
+        d_relu_output_cache,
+        batch_size,
+        in_channels,
+        out_channels,
+        input_height,
+        input_width,
+        kernel_size,
+        stride,
+        padding,
+        conv_output_height,
+        conv_output_width
+    );
+
+    // Update parameters using optimizers in separate streams
+    weights_optimizer.update(d_weights, d_grad_weights, stream2);
+    bias_optimizer.update(d_biases, d_grad_biases, stream3);
+    
+    // Synchronize all streams
+    CHECK_CUDA_ERROR(cudaStreamSynchronize(stream1));
+    CHECK_CUDA_ERROR(cudaStreamSynchronize(stream2));
+    CHECK_CUDA_ERROR(cudaStreamSynchronize(stream3));
+    
+    // Check for errors
     cudaError_t err = cudaGetLastError();
     if (err != cudaSuccess) {
         printf("CUDA Error in backward pass: %s\n", cudaGetErrorString(err));
-        return;
     }
     
-    // Update parameters using optimizers
-    weights_optimizer.update(d_weights, d_grad_weights);
-    bias_optimizer.update(d_biases, d_grad_biases);
-    
-    // Free temporary buffers
+    // Cleanup
     CHECK_CUDA_ERROR(cudaFree(d_grad_weights));
     CHECK_CUDA_ERROR(cudaFree(d_grad_biases));
     CHECK_CUDA_ERROR(cudaFree(d_unpooled_grad));
+    CHECK_CUDA_ERROR(cudaStreamDestroy(stream1));
+    CHECK_CUDA_ERROR(cudaStreamDestroy(stream2));
+    CHECK_CUDA_ERROR(cudaStreamDestroy(stream3));
 }
