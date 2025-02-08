@@ -11,6 +11,7 @@
 #include <cmath>
 #include <random>
 #include <chrono>
+#include <iomanip>
 
 
 class DataSet {
@@ -128,17 +129,19 @@ public:
         t++;
         float alpha_t = learning_rate * std::sqrt(1.0f - std::pow(beta2, t)) / 
                        (1.0f - std::pow(beta1, t));
-        
-        #pragma omp parallel for
-        for (size_t i = 0; i < params.size(); i++) {
-            float scaled_grad = gradients[i];
-            m[i] = beta1 * m[i] + (1.0f - beta1) * scaled_grad;
-            v[i] = beta2 * v[i] + (1.0f - beta2) * scaled_grad * scaled_grad;
-            
-            float update = alpha_t * m[i] / (std::sqrt(v[i]) + epsilon);
-            update = std::max(std::min(update, 1.0f), -1.0f);
+        #pragma omp parallel
+        {   
+            #pragma omp for
+            for (size_t i = 0; i < params.size(); i++) {
+                float scaled_grad = gradients[i];
+                m[i] = beta1 * m[i] + (1.0f - beta1) * scaled_grad;
+                v[i] = beta2 * v[i] + (1.0f - beta2) * scaled_grad * scaled_grad;
+                
+                float update = alpha_t * m[i] / (std::sqrt(v[i]) + epsilon);
+                update = std::max(std::min(update, 1.0f), -1.0f);
 
-            params[i] -= update;
+                    params[i] -= update;
+            }
         }
     }
 };
@@ -212,11 +215,13 @@ class ConvBlock {
             std::vector<float> output(batch_size * out_channels * pool_output_height * pool_output_width, 0.0f);
             pool_indices.resize(output.size());
 
-            #pragma omp parallel for collapse(4)
-            for (int b = 0; b < batch_size; ++b) {
-                for (int oc = 0; oc < out_channels; ++oc) {
-                    for (int ph = 0; ph < pool_output_height; ++ph) {
-                        for (int pw = 0; pw < pool_output_width; ++pw) {
+            #pragma omp parallel
+            {
+                #pragma omp for collapse(4)
+                for (int b = 0; b < batch_size; ++b) {
+                    for (int oc = 0; oc < out_channels; ++oc) {
+                        for (int ph = 0; ph < pool_output_height; ++ph) {
+                            for (int pw = 0; pw < pool_output_width; ++pw) {
                             float max_pool_val = -std::numeric_limits<float>::infinity();
                             int max_pool_idx = -1;
 
@@ -254,20 +259,21 @@ class ConvBlock {
                                 max_pool_val = relu_result;
                                 max_pool_idx = conv_idx;
                             }
+                            }
                         }
-                    }
-                    // Store pooling result
-                    int output_idx = helper_feat_idx(b, oc, ph, pw, out_channels, 
+                        // Store pooling result
+                        int output_idx = helper_feat_idx(b, oc, ph, pw, out_channels, 
                                             pool_output_height, pool_output_width);
-                    output[output_idx] = max_pool_val;
-                    pool_indices[output_idx] = max_pool_idx;
+                        output[output_idx] = max_pool_val;
+                        pool_indices[output_idx] = max_pool_idx;
+                            }
                         }
                     }
                 }
             }
-
             return output;
         }
+
         std::vector<float> backward(const std::vector<float>& grad_output) {
         std::vector<float> input_gradients(cache.size(), 0.0f);
         std::vector<float> weight_gradients(weights.size(), 0.0f);
@@ -283,9 +289,11 @@ class ConvBlock {
         int pool_output_width = (conv_width - pool_size) / pool_stride + 1;
 
 
-        #pragma omp parallel for collapse(4)
-        for (int b = 0; b < batch_size; ++b) {
-            for (int oc = 0; oc < out_channels; ++oc) {
+        #pragma omp parallel
+        {
+            #pragma omp for collapse(4)
+            for (int b = 0; b < batch_size; ++b) {
+                for (int oc = 0; oc < out_channels; ++oc) {
                 for (int h = 0; h < conv_height; ++h) {
                     for (int w = 0; w < conv_width; ++w) {
                         int conv_idx = helper_feat_idx(b, oc, h, w, out_channels, conv_height, conv_width);
@@ -330,10 +338,11 @@ class ConvBlock {
                                     }
                                 }
                             }
-                        }
 
-                        #pragma omp atomic
-                        bias_gradients[oc] += relu_grad;
+                            #pragma omp atomic
+                                bias_gradients[oc] += relu_grad;
+                            }
+                        }
                     }
                 }
             }
@@ -390,39 +399,42 @@ class FullyConnectedLayer {
             std::vector<float> output(batch_size * num_classes);
 
             input_cache = input;
-            #pragma omp parallel for
-            for (int b = 0; b < batch_size; ++b) {
-                // Fully connected forward
-                std::vector<float> fc_output(num_classes);
-                for (int i = 0; i < num_classes; ++i) {
-                    float sum = biases[i];
-                    #pragma omp simd reduction(+:sum)
-                    for (int j = 0; j < in_channels; ++j) {
-                        sum += input[b * in_channels + j] * weights[i * in_channels + j];
+            #pragma omp parallel
+            {
+                #pragma omp for
+                for (int b = 0; b < batch_size; ++b) {
+                    // Fully connected forward
+                    std::vector<float> fc_output(num_classes);
+                    for (int i = 0; i < num_classes; ++i) {
+                        float sum = biases[i];
+                        #pragma omp simd reduction(+:sum)
+                        for (int j = 0; j < in_channels; ++j) {
+                            sum += input[b * in_channels + j] * weights[i * in_channels + j];
+                        }
+                        fc_output[i] = sum;
                     }
-                    fc_output[i] = sum;
-                }
 
-                // Softmax forward (with numerical stability)
-                float max_val = -std::numeric_limits<float>::infinity();
-                #pragma omp simd reduction(max:max_val)
-                for (int j = 0; j < num_classes; ++j) {
-                    max_val = std::max(max_val, fc_output[j]);
-                }
+                    // Softmax forward (with numerical stability)
+                    float max_val = -std::numeric_limits<float>::infinity();
+                    #pragma omp simd reduction(max:max_val)
+                    for (int j = 0; j < num_classes; ++j) {
+                        max_val = std::max(max_val, fc_output[j]);
+                    }
 
-                float sum = 0.0f;
-                #pragma omp simd reduction(+:sum)
-                for (int j = 0; j < num_classes; ++j) {
-                    output[b * num_classes + j] = std::exp(fc_output[j] - max_val);
-                    sum += output[b * num_classes + j];
-                }
+                    float sum = 0.0f;
+                    #pragma omp simd reduction(+:sum)
+                    for (int j = 0; j < num_classes; ++j) {
+                        output[b * num_classes + j] = std::exp(fc_output[j] - max_val);
+                        sum += output[b * num_classes + j];
+                    }
 
-                const float inv_sum = 1.0f / sum;
-                #pragma omp simd
-                for (int j = 0; j < num_classes; ++j) {
-                    const int idx = b * num_classes + j;
-                    output[idx] *= inv_sum;
-                    output_cache[idx] = output[idx];
+                    const float inv_sum = 1.0f / sum;
+                    #pragma omp simd
+                    for (int j = 0; j < num_classes; ++j) {
+                        const int idx = b * num_classes + j;
+                        output[idx] *= inv_sum;
+                        output_cache[idx] = output[idx];
+                    }
                 }
             }
             return output;
@@ -434,10 +446,12 @@ class FullyConnectedLayer {
             std::vector<float> weight_gradients(weights.size(), 0.0f);
             std::vector<float> bias_gradients(biases.size(), 0.0f);
 
-            #pragma omp parallel for collapse(2)
-            for (int b = 0; b < batch_size; ++b) {
-                for (int i = 0; i < num_classes; ++i) {
-                    const float grad = (output_cache[b * num_classes + i] - labels[b][i]) / batch_size;
+            #pragma omp parallel
+            {
+                #pragma omp for collapse(2)
+                for (int b = 0; b < batch_size; ++b) {
+                    for (int i = 0; i < num_classes; ++i) {
+                        const float grad = (output_cache[b * num_classes + i] - labels[b][i]) / batch_size;
 
                     // Accumulate bias gradients
                     #pragma omp atomic
@@ -454,6 +468,7 @@ class FullyConnectedLayer {
                         #pragma omp atomic
                         grad_input[input_idx] += grad * weights[weight_idx];
                     }   
+                    }
                 }
             }
             weights_optimizer.update(weights, weight_gradients);
@@ -467,12 +482,15 @@ class FullyConnectedLayer {
             const float epsilon = 1e-10f;
             const int batch_size = labels.size();
 
-            #pragma omp parallel for collapse(2) reduction(+:loss)
-            for (int b = 0; b < batch_size; ++b) {
-                for (int j = 0; j < num_classes; ++j) {
-                    if (labels[b][j] == 1) {
-                        const int idx = b * num_classes + j;
-                        loss += -std::log(std::max(output_cache[idx], epsilon));
+            #pragma omp parallel
+            {
+                #pragma omp for collapse(2) reduction(+:loss)
+                for (int b = 0; b < batch_size; ++b) {
+                    for (int j = 0; j < num_classes; ++j) {
+                        if (labels[b][j] == 1) {
+                            const int idx = b * num_classes + j;
+                            loss += -std::log(std::max(output_cache[idx], epsilon));
+                        }
                     }
                 }
             }
@@ -498,30 +516,32 @@ class Train {
                                int batch_size) {
             int correct = 0;
             
-            #pragma omp parallel for reduction(+:correct)
-            for (int b = 0; b < batch_size; ++b) {
-                int predicted_class = 0;
-                float max_prob = predictions[b * 10];
-                for (int i = 1; i < 10; ++i) {
-                    float prob = predictions[b * 10 + i];
-                    if (prob > max_prob) {
-                        max_prob = prob;
-                        predicted_class = i;
+            #pragma omp parallel
+            {
+                #pragma omp for reduction(+:correct)
+                for (int b = 0; b < batch_size; ++b) {
+                    int predicted_class = 0;
+                    float max_prob = predictions[b * 10];
+                    for (int i = 1; i < 10; ++i) {
+                        float prob = predictions[b * 10 + i];
+                        if (prob > max_prob) {
+                            max_prob = prob;
+                            predicted_class = i;
+                        }
                     }
-                }
-                // Find true class
-                int true_class = 0;
-                for (int i = 0; i < 10; ++i) {
-                    if (labels[b][i] == 1) {
-                        true_class = i;
-                        break;
+                    // Find true class
+                    int true_class = 0;
+                    for (int i = 0; i < 10; ++i) {
+                        if (labels[b][i] == 1) {
+                            true_class = i;
+                            break;
+                        }
                     }
-                }
-                if (predicted_class == true_class) {
-                    correct++;
+                    if (predicted_class == true_class) {
+                        correct++;
+                    }
                 }
             }
-            
             return static_cast<float>(correct) / batch_size;
         }
 
@@ -581,33 +601,116 @@ class Train {
         }
 };
 
-int main(int argc, char* argv[]) {
+class PerformanceAnalyzer {
+private:
+    std::vector<double> times;
+    std::vector<int> thread_configs;
+    const int num_epochs = 1;
+    const int batch_size = 64;
+    const float learning_rate = 0.005;
+    
+public:
+    void run_benchmarks(Train& trainer, int min_threads, int max_threads) {
+        for(int num_threads = min_threads; num_threads <= max_threads; num_threads *= 2) {
+            std::cout << "\nRunning with " << num_threads << " threads...\n";
+            omp_set_num_threads(num_threads);
+            
+            auto start = std::chrono::high_resolution_clock::now();
+            
+            // Run your training
+            trainer.train(num_epochs, batch_size, learning_rate);
+            
+            auto end = std::chrono::high_resolution_clock::now();
+            double duration = std::chrono::duration_cast<std::chrono::milliseconds>
+                            (end - start).count();
+            
+            
+            times.push_back(duration);
+            thread_configs.push_back(num_threads);
+        }
+        
+        print_analysis();
+    }
+    
+    void print_analysis() {
+        std::cout << "\n=== Performance Analysis ===\n";
+        double sequential_time = times[0];
+        
+        for(size_t i = 0; i < times.size(); i++) {
+            int threads = thread_configs[i];
+            double speedup = sequential_time / times[i];
+            double efficiency = speedup / threads;
+            
+            std::cout << std::fixed << std::setprecision(2)
+                     << "Threads: " << threads 
+                     << "\nTime: " << times[i] << "ms"
+                     << "\nSpeedup: " << speedup << "x"
+                     << "\nEfficiency: " << efficiency * 100 << "%\n\n";
+        }
+    }
+};
+
+// Usage in main:
+int main() {
     try {
-        // TIMER START
-        std::cout << "Starting Loading Data..." << std::endl;
         DataSet data_set("../data");
         data_set.load_data();
-        std::cout << "Data Loaded Successfully!" << std::endl;
-        
-        int batch_size = 64;
-        if (argc > 1) {
-            batch_size = std::stoi(argv[1]);
-        }
+
         float learning_rate = 0.005;
-        int num_epochs = 10;
-
-
-        auto start_time = std::chrono::high_resolution_clock::now();
         Train trainer(data_set, learning_rate);
-        trainer.train(num_epochs, batch_size, learning_rate);
-        // TIMER END
-        auto end_time = std::chrono::high_resolution_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
-        std::cout << "Training time: " << duration.count() << " milliseconds" << std::endl;
-
+        PerformanceAnalyzer analyzer;
+        
+        
+        // Test with 1, 2, 4, 8 threads
+        analyzer.run_benchmarks(trainer, 1, 8);
+        
     } catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << std::endl;
         return 1;
     }
     return 0;
 }
+
+// int main(int argc, char* argv[]) {
+//     try {
+//         // TIMER START
+//         std::cout << "Starting Loading Data..." << std::endl;
+//         DataSet data_set("../data");
+//         data_set.load_data();
+//         std::cout << "Data Loaded Successfully!" << std::endl;
+
+//         int batch_size = 64;
+//         if (argc > 1) {
+//             batch_size = std::stoi(argv[1]);
+//         }
+
+//         float learning_rate = 0.005;
+//         int num_epochs = 1;
+
+//         for (int i = 0; i < 8; i++) {
+//             omp_set_num_threads(i);
+//             auto start_time = std::chrono::high_resolution_clock::now();
+//             Train trainer(data_set, learning_rate);
+//             trainer.train(num_epochs, batch_size, learning_rate);
+//             auto end_time = std::chrono::high_resolution_clock::now();
+//             auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+//             std::cout << "Training time: " << duration.count() << " milliseconds" << std::endl;
+//             times.push_back(duration.count());
+//         }
+//         analyze_performance(times);
+        
+
+//         // auto start_time = std::chrono::high_resolution_clock::now();
+//         // Train trainer(data_set, learning_rate);
+//         // trainer.train(num_epochs, batch_size, learning_rate);
+//         // // TIMER END
+//         // auto end_time = std::chrono::high_resolution_clock::now();
+//         // auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+//         // std::cout << "Training time: " << duration.count() << " milliseconds" << std::endl;
+
+//     } catch (const std::exception& e) {
+//         std::cerr << "Error: " << e.what() << std::endl;
+//         return 1;
+//     }
+//     return 0;
+// }
