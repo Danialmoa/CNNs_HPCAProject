@@ -606,7 +606,7 @@ private:
     std::vector<double> times;
     std::vector<int> thread_configs;
     const int num_epochs = 1;
-    const int batch_size = 128;
+    const int batch_size = 512;
     const float learning_rate = 0.005;
     
 public:
