@@ -662,7 +662,7 @@ int main() {
         
         
         // Test with 1, 2, 4, 8, 10, 12 threads
-        analyzer.run_benchmarks(trainer, 1, 12);
+        analyzer.run_benchmarks(trainer, 8, 16);
         
     } catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << std::endl;
