@@ -661,8 +661,8 @@ int main() {
         PerformanceAnalyzer analyzer;
         
         
-        // Test with 1, 2, 4, 8, 10, 12 threads
-        analyzer.run_benchmarks(trainer, 8, 16);
+        // Test with 1, 2, 4, 8, 10, 16 threads
+        analyzer.run_benchmarks(trainer, 1, 16);
         
     } catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << std::endl;
