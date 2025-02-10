@@ -12,6 +12,7 @@
 #include <random>
 #include <chrono>
 #include <iomanip>
+#include <chrono>
 
 
 class DataSet {
@@ -650,7 +651,92 @@ public:
     }
 };
 
-// Usage in main:
+
+#include <chrono>
+#include <iostream>
+#include <iomanip>
+
+// Add this before main()
+class MemoryBandwidthTest {
+public:
+    static void measureBandwidth(size_t size_mb) {
+        // Allocate memory for testing
+        const size_t size_bytes = size_mb * 1024 * 1024;
+        std::vector<float> src(size_bytes / sizeof(float));
+        std::vector<float> dst(size_bytes / sizeof(float));
+
+        // Initialize source array
+        for (size_t i = 0; i < src.size(); ++i) {
+            src[i] = static_cast<float>(i);
+        }
+
+        // Measure read bandwidth
+        measureRead(src, "Read Bandwidth");
+
+        // Measure write bandwidth
+        measureWrite(dst, "Write Bandwidth");
+
+        // Measure copy bandwidth
+        measureCopy(src, dst, "Copy Bandwidth");
+    }
+
+private:
+    static void measureRead(const std::vector<float>& data, const std::string& label) {
+        volatile float sum = 0;  // volatile to prevent optimization
+        
+        auto start = std::chrono::high_resolution_clock::now();
+        
+        #pragma omp parallel for reduction(+:sum)
+        for (size_t i = 0; i < data.size(); ++i) {
+            sum += data[i];
+        }
+
+        auto end = std::chrono::high_resolution_clock::now();
+        printBandwidth(data.size() * sizeof(float), start, end, label);
+    }
+
+    static void measureWrite(std::vector<float>& data, const std::string& label) {
+        auto start = std::chrono::high_resolution_clock::now();
+        
+        #pragma omp parallel for
+        for (size_t i = 0; i < data.size(); ++i) {
+            data[i] = static_cast<float>(i);
+        }
+
+        auto end = std::chrono::high_resolution_clock::now();
+        printBandwidth(data.size() * sizeof(float), start, end, label);
+    }
+
+    static void measureCopy(const std::vector<float>& src, std::vector<float>& dst, const std::string& label) {
+        auto start = std::chrono::high_resolution_clock::now();
+        
+        #pragma omp parallel for
+        for (size_t i = 0; i < src.size(); ++i) {
+            dst[i] = src[i];
+        }
+
+        auto end = std::chrono::high_resolution_clock::now();
+        printBandwidth(src.size() * sizeof(float) * 2, start, end, label);  // *2 because read+write
+    }
+
+    static void printBandwidth(size_t bytes, 
+                             std::chrono::high_resolution_clock::time_point start,
+                             std::chrono::high_resolution_clock::time_point end,
+                             const std::string& label) {
+        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+        double seconds = duration.count() / 1000000.0;
+        double gb = bytes / (1024.0 * 1024.0 * 1024.0);
+        double bandwidth = gb / seconds;
+
+        std::cout << std::fixed << std::setprecision(2)
+                  << label << ":\n"
+                  << "  Data size: " << gb << " GB\n"
+                  << "  Time: " << seconds << " seconds\n"
+                  << "  Bandwidth: " << bandwidth << " GB/s\n"
+                  << std::endl;
+    }
+};
+
 int main() {
     try {
         DataSet data_set("../data");
@@ -660,9 +746,10 @@ int main() {
         Train trainer(data_set, learning_rate);
         PerformanceAnalyzer analyzer;
         
-        
+        int max_threads = omp_get_max_threads();
+        std::cout << "Max threads: " << max_threads << std::endl;
         // Test with 1, 2, 4, 8, 10, 16 threads
-        analyzer.run_benchmarks(trainer, 1, 16);
+        analyzer.run_benchmarks(trainer, max_threads, max_threads+1);
         
     } catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << std::endl;
