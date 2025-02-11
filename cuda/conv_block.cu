@@ -601,14 +601,52 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
     bias_optimizer.update(d_biases, d_grad_biases, stream3);
 
     // Debug: Check gradient magnitudes
-    float grad_weights_norm = 0.0f;
-    float grad_biases_norm = 0.0f;
+    std::vector<float> h_grad_output(batch_size * out_channels * pool_output_height * pool_output_width);
+    cudaMemcpy(h_grad_output.data(), d_grad_output, h_grad_output.size() * sizeof(float), cudaMemcpyDeviceToHost);
     
-    cudaMemcpy(&grad_weights_norm, d_grad_weights, sizeof(float), cudaMemcpyDeviceToHost);
-    cudaMemcpy(&grad_biases_norm, d_grad_biases, sizeof(float), cudaMemcpyDeviceToHost);
+    float grad_output_avg = 0.0f;
+    float grad_output_max = 0.0f;
+    for (size_t i = 0; i < h_grad_output.size(); ++i) {
+        grad_output_avg += std::abs(h_grad_output[i]);
+        grad_output_max = std::max(grad_output_max, std::abs(h_grad_output[i]));
+    }
+    grad_output_avg /= h_grad_output.size();
+
+    // Check weight gradients
+    size_t weight_size = out_channels * in_channels * kernel_size * kernel_size;
+    std::vector<float> h_grad_weights(weight_size);
+    std::vector<float> h_weights(weight_size);
     
-    if (grad_weights_norm < 1e-8 || grad_biases_norm < 1e-8) {
-        std::cout << "Warning: Very small gradients detected" << std::endl;
+    cudaMemcpy(h_grad_weights.data(), d_grad_weights, weight_size * sizeof(float), cudaMemcpyDeviceToHost);
+    cudaMemcpy(h_weights.data(), d_weights, weight_size * sizeof(float), cudaMemcpyDeviceToHost);
+    
+    float weight_grad_avg = 0.0f;
+    float weight_grad_max = 0.0f;
+    float weight_avg = 0.0f;
+    float weight_max = 0.0f;
+    
+    for (size_t i = 0; i < weight_size; ++i) {
+        weight_grad_avg += std::abs(h_grad_weights[i]);
+        weight_grad_max = std::max(weight_grad_max, std::abs(h_grad_weights[i]));
+        weight_avg += std::abs(h_weights[i]);
+        weight_max = std::max(weight_max, std::abs(h_weights[i]));
+    }
+    weight_grad_avg /= weight_size;
+    weight_avg /= weight_size;
+
+    std::cout << "\nGradient and Parameter Statistics:" << std::endl;
+    std::cout << "Incoming gradients (d_grad_output):" << std::endl;
+    std::cout << "  Avg: " << grad_output_avg << " Max: " << grad_output_max << std::endl;
+    std::cout << "Weight gradients:" << std::endl;
+    std::cout << "  Avg: " << weight_grad_avg << " Max: " << weight_grad_max << std::endl;
+    std::cout << "Current weights:" << std::endl;
+    std::cout << "  Avg: " << weight_avg << " Max: " << weight_max << std::endl;
+    
+    if (grad_output_avg < 1e-8) {
+        std::cout << "WARNING: Very small incoming gradients!" << std::endl;
+    }
+    if (weight_grad_avg < 1e-8) {
+        std::cout << "WARNING: Very small weight gradients!" << std::endl;
     }
     
     // Synchronize all streams
