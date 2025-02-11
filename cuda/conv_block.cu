@@ -148,16 +148,16 @@ __global__ void max_pool_forward_kernel(
 
 // Computes gradients for convolution layer
 __global__ void conv_backward_kernel(
-    const float* grad_output,     // Gradient from next layer
-    const float* weights,         // Layer weights
-    float* grad_input,            // Gradient w.r.t input
-    float* grad_weights,          // Gradient w.r.t weights  
-    float* grad_biases,           // Gradient w.r.t biases
-    const float* input,           // Layer input
-    const float* relu_output,     // ReLU activation output
+    const float* grad_output,      // Gradient from next layer
+    const float* weights,          // Current layer weights
+    float* grad_input,            // Gradient to previous layer
+    float* grad_weights,          // Weight gradients
+    float* grad_biases,           // Bias gradients
+    const float* input,           // Cached input from forward pass
+    const float* relu_output,     // Cached ReLU output
     int batch_size,
     int in_channels,
-    int out_channels, 
+    int out_channels,
     int height,
     int width,
     int kernel_size,
@@ -166,60 +166,57 @@ __global__ void conv_backward_kernel(
     int output_height,
     int output_width) {
     
-    __shared__ float s_grad[TILE_SIZE][TILE_SIZE];
-    __shared__ float s_input[TILE_SIZE + BLOCK_SIZE - 1][TILE_SIZE + BLOCK_SIZE - 1];
-    __shared__ float s_weights[BLOCK_SIZE][BLOCK_SIZE];
-    __shared__ float s_partial_grad_weights[BLOCK_SIZE][BLOCK_SIZE];
+    extern __shared__ float s_mem[];
+    float* s_input = (float*)s_mem;
+    float* s_grad = (float*)(s_mem + TILE_SIZE * TILE_SIZE);
+    float* s_weights = (float*)(s_grad + TILE_SIZE * TILE_SIZE);
+    float* s_partial_grad_weights = (float*)(s_weights + kernel_size * kernel_size);
     
-    // Thread indices
-    int tx = threadIdx.x;
-    int ty = threadIdx.y;
-    
-    // Block indices
-    int b = blockIdx.x;  // batch
+    int b = blockIdx.x;  // batch index
     int oc = blockIdx.y; // output channel
     int tile_idx = blockIdx.z;
-    
-    // Calculate tile position
     int tile_h = (tile_idx / ((width + TILE_SIZE - 1) / TILE_SIZE)) * TILE_SIZE;
     int tile_w = (tile_idx % ((width + TILE_SIZE - 1) / TILE_SIZE)) * TILE_SIZE;
-    int h = tile_h + ty;
-    int w = tile_w + tx;
+    int h = tile_h + threadIdx.y;
+    int w = tile_w + threadIdx.x;
     
     // Initialize shared memory
-    if (tx < BLOCK_SIZE && ty < BLOCK_SIZE) {
-        s_partial_grad_weights[ty][tx] = 0.0f;
+    if (threadIdx.y < kernel_size && threadIdx.x < kernel_size) {
+        s_partial_grad_weights[threadIdx.y * kernel_size + threadIdx.x] = 0.0f;
     }
-    
-    // Load gradient and apply ReLU derivative
-    if (h < output_height && w < output_width && b < batch_size) {
-        int output_idx = ((b * out_channels + oc) * output_height + h) * output_width + w;
-        s_grad[ty][tx] = grad_output[output_idx] * (relu_output[output_idx] > 0 ? 1.0f : 0.0f);
-    } else {
-        s_grad[ty][tx] = 0.0f;
-    }
-    
     __syncthreads();
     
     // Process each input channel
     for (int ic = 0; ic < in_channels; ic++) {
-        // Load input tile into shared memory
-        for (int i = ty; i < TILE_SIZE + kernel_size - 1; i += BLOCK_SIZE) {
-            for (int j = tx; j < TILE_SIZE + kernel_size - 1; j += BLOCK_SIZE) {
+        // Load input patch into shared memory
+        for (int i = threadIdx.y; i < TILE_SIZE; i += blockDim.y) {
+            for (int j = threadIdx.x; j < TILE_SIZE; j += blockDim.x) {
                 int ih = tile_h * stride - padding + i;
                 int iw = tile_w * stride - padding + j;
                 
                 if (ih >= 0 && ih < height && iw >= 0 && iw < width && b < batch_size) {
-                    s_input[i][j] = input[((b * in_channels + ic) * height + ih) * width + iw];
+                    s_input[i * TILE_SIZE + j] = input[((b * in_channels + ic) * height + ih) * width + iw];
                 } else {
-                    s_input[i][j] = 0.0f;
+                    s_input[i * TILE_SIZE + j] = 0.0f;
                 }
             }
         }
         
         // Load weights into shared memory
-        if (ty < kernel_size && tx < kernel_size) {
-            s_weights[ty][tx] = weights[((oc * in_channels + ic) * kernel_size + ty) * kernel_size + tx];
+        if (threadIdx.y < kernel_size && threadIdx.x < kernel_size) {
+            s_weights[threadIdx.y * kernel_size + threadIdx.x] = 
+                weights[((oc * in_channels + ic) * kernel_size + threadIdx.y) * kernel_size + threadIdx.x];
+        }
+        
+        // Load gradients into shared memory
+        if (h < output_height && w < output_width) {
+            s_grad[threadIdx.y * TILE_SIZE + threadIdx.x] = 
+                grad_output[((b * out_channels + oc) * output_height + h) * output_width + w];
+            
+            // ReLU gradient
+            if (relu_output[((b * out_channels + oc) * output_height + h) * output_width + w] <= 0) {
+                s_grad[threadIdx.y * TILE_SIZE + threadIdx.x] = 0;
+            }
         }
         
         __syncthreads();
@@ -227,6 +224,8 @@ __global__ void conv_backward_kernel(
         // Compute gradients
         if (h < output_height && w < output_width && b < batch_size) {
             // Compute input gradients
+            float grad_val = s_grad[threadIdx.y * TILE_SIZE + threadIdx.x];
+            
             for (int kh = 0; kh < kernel_size; kh++) {
                 for (int kw = 0; kw < kernel_size; kw++) {
                     int ih = h * stride - padding + kh;
@@ -235,19 +234,22 @@ __global__ void conv_backward_kernel(
                     if (ih >= 0 && ih < height && iw >= 0 && iw < width) {
                         int input_idx = ((b * in_channels + ic) * height + ih) * width + iw;
                         atomicAdd(&grad_input[input_idx], 
-                                s_grad[ty][tx] * s_weights[kh][kw]);
+                                grad_val * s_weights[kh * kernel_size + kw]);
                     }
                 }
             }
             
-            // Accumulate weight gradients in shared memory
+            // Compute weight gradients
             for (int kh = 0; kh < kernel_size; kh++) {
                 for (int kw = 0; kw < kernel_size; kw++) {
                     int ih = h * stride - padding + kh;
                     int iw = w * stride - padding + kw;
                     
                     if (ih >= 0 && ih < height && iw >= 0 && iw < width) {
-                        s_partial_grad_weights[kh][kw] += s_input[ih - tile_h + padding][iw - tile_w + padding] * s_grad[ty][tx];
+                        float input_val = s_input[(ih - tile_h + padding) * TILE_SIZE + 
+                                                (iw - tile_w + padding)];
+                        atomicAdd(&s_partial_grad_weights[kh * kernel_size + kw],
+                                input_val * grad_val);
                     }
                 }
             }
@@ -257,18 +259,19 @@ __global__ void conv_backward_kernel(
     }
     
     // Accumulate weight gradients globally
-    if (ty < kernel_size && tx < kernel_size) {
-        int weight_idx = ((oc * in_channels) * kernel_size + ty) * kernel_size + tx;
-        atomicAdd(&grad_weights[weight_idx], s_partial_grad_weights[ty][tx]);
+    if (threadIdx.y < kernel_size && threadIdx.x < kernel_size) {
+        int weight_idx = ((oc * in_channels) * kernel_size + threadIdx.y) * kernel_size + threadIdx.x;
+        atomicAdd(&grad_weights[weight_idx], 
+                 s_partial_grad_weights[threadIdx.y * kernel_size + threadIdx.x] / batch_size);
     }
     
     // Accumulate bias gradients
-    if (tx == 0 && ty == 0) {
+    if (threadIdx.x == 0 && threadIdx.y == 0) {
         float bias_grad = 0.0f;
-        for (int i = 0; i < TILE_SIZE; i++) {
-            for (int j = 0; j < TILE_SIZE; j++) {
-                if (tile_h + i < output_height && tile_w + j < output_width) {
-                    bias_grad += s_grad[i][j];
+        for (int h = 0; h < TILE_SIZE; h++) {
+            for (int w = 0; w < TILE_SIZE; w++) {
+                if (tile_h + h < output_height && tile_w + w < output_width) {
+                    bias_grad += s_grad[h * TILE_SIZE + w];
                 }
             }
         }
