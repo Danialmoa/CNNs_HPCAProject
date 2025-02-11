@@ -78,24 +78,26 @@ int main() {
         dataset.load_data();
         dataset.to_gpu();
 
-        const int num_batches = dataset.get_num_batches(batch_size);
-        std::cout << "Number of batches: " << num_batches << std::endl;
-        
-        // Create network layers
-        std::cout << "Creating network..." << std::endl;
-        ConvBlock conv1(3, 32, 3, 1, 1, 2, 2, learning_rate);  // input: 32x32x3, output: 16x16x32
-        FullyConnectedLayer fc(32 * 16 * 16, 10, learning_rate);  // input: 8192, output: 10
-
-        // Allocate GPU memory for data and intermediate results
-        float *d_batch_images = nullptr;
-        uint8_t *d_batch_labels = nullptr;
-        float *d_conv_output = nullptr;
-        float *d_fc_output = nullptr;
-        float *d_grad_conv_output = nullptr;
-        float *d_grad_input = nullptr;
-        
         for (int batch_size : batch_sizes) {
             std::cout << "\n=== Testing Batch Size: " << batch_size << " ===" << std::endl;
+
+            const int num_batches = dataset.get_num_batches(batch_size);
+            std::cout << "Number of batches: " << num_batches << std::endl;
+            
+            // Create network layers
+            std::cout << "Creating network..." << std::endl;
+            ConvBlock conv1(3, 32, 3, 1, 1, 2, 2, learning_rate);  // input: 32x32x3, output: 16x16x32
+            FullyConnectedLayer fc(32 * 16 * 16, 10, learning_rate);  // input: 8192, output: 10
+
+            // Allocate GPU memory for data and intermediate results
+            float *d_batch_images = nullptr;
+            uint8_t *d_batch_labels = nullptr;
+            float *d_conv_output = nullptr;
+            float *d_fc_output = nullptr;
+            float *d_grad_conv_output = nullptr;
+            float *d_grad_input = nullptr;
+            
+       
             // Allocate memory
             CHECK_CUDA_ERROR(cudaMalloc(&d_batch_images, batch_size * 3 * 32 * 32 * sizeof(float)));
             CHECK_CUDA_ERROR(cudaMalloc(&d_batch_labels, batch_size * 10 * sizeof(uint8_t)));
@@ -109,6 +111,7 @@ int main() {
 
             // Training loop
             std::cout << "Starting training..." << std::endl;
+            
             for (int epoch = 0; epoch < num_epochs; ++epoch) {
                 float epoch_loss = 0.0f;
                 float epoch_accuracy = 0.0f;
