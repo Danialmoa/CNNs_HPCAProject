@@ -48,7 +48,7 @@ public:
     ConvBlock(int in_channels, int out_channels, int kernel_size, 
               int stride, int padding, int pool_size, int pool_stride, 
               float learning_rate);
-    ~ConvBlock()
+    ~ConvBlock();
     // Forward and backward functions
     void forward(const float* d_input, float* d_output, int batch_size, 
                 int height, int width);
