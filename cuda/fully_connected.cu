@@ -209,6 +209,10 @@ void FullyConnectedLayer::forward(const float* d_input, float* d_output, int bat
 }
 
 void FullyConnectedLayer::backward(const uint8_t* d_labels, float* d_grad_input, int batch_size) {
+    if (!streams_initialized) {
+        init_streams();
+    }
+    
     // Allocate memory for gradients
     float *d_grad_weights, *d_grad_biases;
     CHECK_CUDA_ERROR(cudaMalloc(&d_grad_weights, 
