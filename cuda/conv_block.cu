@@ -337,7 +337,7 @@ ConvBlock::ConvBlock(int in_channels, int out_channels, int kernel_size,
     }
     
     // Initialize weights and biases on CPU
-    std::vector<float> h_weights(in_channels * kernel_size * kernel_size);
+    std::vector<float> h_weights(out_channels * in_channels * kernel_size * kernel_size);
     std::vector<float> h_biases(out_channels);
     
     // Xavier/Glorot initialization for weights
@@ -566,7 +566,7 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
         pool_output_height,
         pool_output_width
     );
-    
+    CHECK_LAST_CUDA_ERROR();
     // Launch convolution backward
     dim3 blockDim(BLOCK_SIZE, BLOCK_SIZE);
     dim3 gridDim(
@@ -595,6 +595,7 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
         conv_output_height,
         conv_output_width
     );
+    CHECK_LAST_CUDA_ERROR();
 
     // Update parameters using optimizers in separate streams
     weights_optimizer.update(d_weights, d_grad_weights, stream2);
