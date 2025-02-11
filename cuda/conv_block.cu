@@ -7,6 +7,7 @@
 
 #define TILE_SIZE 16
 #define BLOCK_SIZE 16
+#define MAX_THREADS 256
 
 // Performs forward convolution, applies ReLU activation
 __global__ void conv_forward_kernel(
@@ -510,7 +511,9 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
     if (batch_size != current_batch_size) {
         throw std::invalid_argument("Batch size mismatch between forward and backward passes");
     }
-    
+    if (!streams_initialized) {
+        init_streams();
+    }
     // Calculate sizes
     size_t weight_size = out_channels * in_channels * kernel_size * kernel_size;
     size_t bias_size = out_channels;

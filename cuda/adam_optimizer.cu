@@ -90,7 +90,7 @@ void AdamOptimizer::update(float* d_params, const float* d_gradients) {
     const int num_blocks = (param_size + block_size - 1) / block_size;
 
     // Launch kernel
-    adam_update_kernel<<<num_blocks, block_size>>>(
+    adam_update_kernel<<<num_blocks, block_size, 0, stream>>>(
         d_params, d_gradients,
         d_m, d_v,
         learning_rate, beta1, beta2, epsilon,

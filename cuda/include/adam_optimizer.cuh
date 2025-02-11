@@ -24,5 +24,5 @@ public:
     ~AdamOptimizer();
 
     void init(size_t num_params);
-    void update(float* d_params, const float* d_gradients);
+    void update(float* d_params, const float* d_gradients, cudaStream_t stream = nullptr);
 };

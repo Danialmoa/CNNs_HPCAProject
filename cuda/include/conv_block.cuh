@@ -22,6 +22,8 @@ private:
     int conv_output_height, conv_output_width;
     int pool_output_height, pool_output_width;
 
+    cudaStream_t stream1, stream2, stream3;
+
     //Adam Optimizer
     AdamOptimizer weights_optimizer;
     AdamOptimizer bias_optimizer;
@@ -36,11 +38,27 @@ private:
 public:
     ConvBlock(int in_channels, int out_channels, int kernel_size, 
               int stride, int padding, int pool_size, int pool_stride, 
-              float learning_rate);
-    ~ConvBlock();
+              float learning_rate);{
+                streams_initialized = false;
+              }
+    ~ConvBlock(){
+        if (streams_initialized) {
+            cudaStreamDestroy(stream1);
+            cudaStreamDestroy(stream2);
+            cudaStreamDestroy(stream3);
+        }
+    };
 
     // Forward and backward functions
     void forward(const float* d_input, float* d_output, int batch_size, 
                 int height, int width);
     void backward(const float* d_grad_output, float* d_grad_input, int batch_size);
+    void init_streams() {
+        if (!streams_initialized) {
+            CHECK_CUDA_ERROR(cudaStreamCreate(&stream1));
+            CHECK_CUDA_ERROR(cudaStreamCreate(&stream2));
+            CHECK_CUDA_ERROR(cudaStreamCreate(&stream3));
+            streams_initialized = true;
+        }
+    }
 };
