@@ -596,6 +596,17 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
     // Update parameters using optimizers in separate streams
     weights_optimizer.update(d_weights, d_grad_weights, stream2);
     bias_optimizer.update(d_biases, d_grad_biases, stream3);
+
+    // Debug: Check gradient magnitudes
+    float grad_weights_norm = 0.0f;
+    float grad_biases_norm = 0.0f;
+    
+    cudaMemcpy(&grad_weights_norm, d_grad_weights, sizeof(float), cudaMemcpyDeviceToHost);
+    cudaMemcpy(&grad_biases_norm, d_grad_biases, sizeof(float), cudaMemcpyDeviceToHost);
+    
+    if (grad_weights_norm < 1e-8 || grad_biases_norm < 1e-8) {
+        std::cout << "Warning: Very small gradients detected" << std::endl;
+    }
     
     // Synchronize all streams
     CHECK_CUDA_ERROR(cudaStreamSynchronize(stream1));
