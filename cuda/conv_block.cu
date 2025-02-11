@@ -279,6 +279,18 @@ __global__ void conv_backward_kernel(
     }
 }
 
+__global__ void clip_gradients_kernel(float* gradients, size_t size, float max_norm) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < size) {
+        float val = gradients[idx];
+        if (val > max_norm) {
+            gradients[idx] = max_norm;
+        } else if (val < -max_norm) {
+            gradients[idx] = -max_norm;
+        }
+    }
+}
+
 __global__ void max_pool_backward_kernel(
     const float* grad_output,     // Gradient from next layer
     float* grad_input,            // Gradient to previous layer
