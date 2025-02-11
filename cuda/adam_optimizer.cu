@@ -76,7 +76,7 @@ int getOptimalBlockSize() {
     return std::min(256, maxThreads);
 }
 
-void AdamOptimizer::update(float* d_params, const float* d_gradients) {
+void AdamOptimizer::update(float* d_params, const float* d_gradients, cudaStream_t stream) {
     if (!d_m || !d_v) {
         throw std::runtime_error("Adam optimizer not initialized!");
     }
