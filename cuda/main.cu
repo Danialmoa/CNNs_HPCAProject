@@ -111,7 +111,7 @@ int main() {
 
             // Training loop
             std::cout << "Starting training..." << std::endl;
-            
+
             for (int epoch = 0; epoch < num_epochs; ++epoch) {
                 float epoch_loss = 0.0f;
                 float epoch_accuracy = 0.0f;
@@ -150,9 +150,6 @@ int main() {
                         << " - Time: " << duration.count() << "s" << std::endl;
                 
             }
-            std::cout << "GPU Implementation:" << std::endl;
-            std::cout << "Time: " << duration.count() << "s" << std::endl;
-            std::cout << "Accuracy: " << epoch_accuracy * 100 << "%" << std::endl;
 
             // Free GPU memory
             cudaFree(d_batch_images);
