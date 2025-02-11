@@ -125,6 +125,7 @@ int main() {
 
                 for (int batch = 0; batch < num_batches; ++batch) {
                     // Get batch data
+                    std::cout << "Getting batch data..." << batch << std::endl;
                     dataset.get_batch_data(d_batch_images, d_batch_labels, batch, batch_size);
 
                     // Forward pass
