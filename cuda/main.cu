@@ -65,7 +65,13 @@ int main() {
     try {
         // Set device to use
         CHECK_CUDA_ERROR(cudaSetDevice(0));
-
+        
+        cudaDeviceProp prop;
+        CHECK_CUDA_ERROR(cudaGetDeviceProperties(&prop, 0));
+        std::cout << "Using GPU: " << prop.name << std::endl;
+        std::cout << "Max threads per block: " << prop.maxThreadsPerBlock << std::endl;
+        std::cout << "Max threads per multiprocessor: " << prop.maxThreadsPerMultiProcessor << std::endl;
+        std::cout << "Number of SMs: " << prop.multiProcessorCount << std::endl;
 
         // Training hyperparameters
         const std::vector<int> batch_sizes = {32, 64, 128, 256, 512, 1024};
