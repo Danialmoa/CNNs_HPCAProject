@@ -291,6 +291,13 @@ __global__ void clip_gradients_kernel(float* gradients, size_t size, float max_n
     }
 }
 
+__global__ void clip_values_kernel(float* values, size_t size, float min_val, float max_val) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < size) {
+        values[idx] = fmaxf(fminf(values[idx], max_val), min_val);
+    }
+}
+
 __global__ void max_pool_backward_kernel(
     const float* grad_output,     // Gradient from next layer
     float* grad_input,            // Gradient to previous layer
@@ -611,7 +618,13 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
     CHECK_LAST_CUDA_ERROR();
     cudaDeviceSynchronize();
 
-    const float max_grad_norm = 1.0f; 
+    
+    
+    // Update parameters using optimizers in separate streams
+    weights_optimizer.update(d_weights, d_grad_weights, stream2);
+    bias_optimizer.update(d_biases, d_grad_biases, stream3);
+
+    const float max_grad_norm = 2.0f; 
     
     dim3 clip_block(256);
     dim3 clip_grid((weight_size + clip_block.x - 1) / clip_block.x);
@@ -632,59 +645,17 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
         max_grad_norm
     );
     CHECK_LAST_CUDA_ERROR();
-    
+
+
+    const float max_weight_val = 2.0f;
+    clip_values_kernel<<<(weight_size + 255) / 256, 256>>>(
+        d_weights,
+        weight_size,
+        -max_weight_val,
+        max_weight_val
+    );
     cudaDeviceSynchronize();
-    // Update parameters using optimizers in separate streams
-    weights_optimizer.update(d_weights, d_grad_weights, stream2);
-    bias_optimizer.update(d_biases, d_grad_biases, stream3);
 
-    // Debug: Check gradient magnitudes
-    std::vector<float> h_grad_output(batch_size * out_channels * pool_output_height * pool_output_width);
-    cudaMemcpy(h_grad_output.data(), d_grad_output, h_grad_output.size() * sizeof(float), cudaMemcpyDeviceToHost);
-    
-    float grad_output_avg = 0.0f;
-    float grad_output_max = 0.0f;
-    for (size_t i = 0; i < h_grad_output.size(); ++i) {
-        grad_output_avg += std::abs(h_grad_output[i]);
-        grad_output_max = std::max(grad_output_max, std::abs(h_grad_output[i]));
-    }
-    grad_output_avg /= h_grad_output.size();
-
-    // Check weight gradients
-    std::vector<float> h_grad_weights(weight_size);
-    std::vector<float> h_weights(weight_size);
-    
-    cudaMemcpy(h_grad_weights.data(), d_grad_weights, weight_size * sizeof(float), cudaMemcpyDeviceToHost);
-    cudaMemcpy(h_weights.data(), d_weights, weight_size * sizeof(float), cudaMemcpyDeviceToHost);
-    
-    float weight_grad_avg = 0.0f;
-    float weight_grad_max = 0.0f;
-    float weight_avg = 0.0f;
-    float weight_max = 0.0f;
-    
-    for (size_t i = 0; i < weight_size; ++i) {
-        weight_grad_avg += std::abs(h_grad_weights[i]);
-        weight_grad_max = std::max(weight_grad_max, std::abs(h_grad_weights[i]));
-        weight_avg += std::abs(h_weights[i]);
-        weight_max = std::max(weight_max, std::abs(h_weights[i]));
-    }
-    weight_grad_avg /= weight_size;
-    weight_avg /= weight_size;
-
-    std::cout << "\nGradient and Parameter Statistics:" << std::endl;
-    std::cout << "Incoming gradients (d_grad_output):" << std::endl;
-    std::cout << "  Avg: " << grad_output_avg << " Max: " << grad_output_max << std::endl;
-    std::cout << "Weight gradients:" << std::endl;
-    std::cout << "  Avg: " << weight_grad_avg << " Max: " << weight_grad_max << std::endl;
-    std::cout << "Current weights:" << std::endl;
-    std::cout << "  Avg: " << weight_avg << " Max: " << weight_max << std::endl;
-    
-    if (grad_output_avg < 1e-8) {
-        std::cout << "WARNING: Very small incoming gradients!" << std::endl;
-    }
-    if (weight_grad_avg < 1e-8) {
-        std::cout << "WARNING: Very small weight gradients!" << std::endl;
-    }
     
     // Synchronize all streams
     CHECK_CUDA_ERROR(cudaStreamSynchronize(stream1));
