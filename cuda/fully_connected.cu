@@ -216,7 +216,7 @@ void FullyConnectedLayer::backward(const uint8_t* d_labels, float* d_grad_input,
     CHECK_CUDA_ERROR(cudaMalloc(&d_grad_biases, num_classes * sizeof(float)));
     
     // Zero out gradients
-    HECK_CUDA_ERROR(cudaMemsetAsync(d_grad_weights, 0, 
+    CHECK_CUDA_ERROR(cudaMemsetAsync(d_grad_weights, 0, 
                                num_classes * in_features * sizeof(float), stream1));
     CHECK_CUDA_ERROR(cudaMemsetAsync(d_grad_biases, 0, 
                                num_classes * sizeof(float), stream2));
