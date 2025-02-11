@@ -21,9 +21,9 @@ private:
     int input_height, input_width;
     int conv_output_height, conv_output_width;
     int pool_output_height, pool_output_width;
-    bool streams_initialized;
 
     cudaStream_t stream1, stream2, stream3;
+    bool streams_initialized;
 
     //Adam Optimizer
     AdamOptimizer weights_optimizer;
@@ -53,5 +53,4 @@ public:
     void forward(const float* d_input, float* d_output, int batch_size, 
                 int height, int width);
     void backward(const float* d_grad_output, float* d_grad_input, int batch_size);
-    void init_streams();
 };
