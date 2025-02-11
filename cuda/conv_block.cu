@@ -315,7 +315,8 @@ ConvBlock::ConvBlock(int in_channels, int out_channels, int kernel_size,
       bias_optimizer(learning_rate),
       d_weights(nullptr), d_biases(nullptr), d_cache(nullptr),
       d_conv_output_cache(nullptr), d_relu_output_cache(nullptr),
-      d_pool_indices(nullptr), current_batch_size(0) {
+      d_pool_indices(nullptr), current_batch_size(0),
+      streams_initialized(false) {
 
     std::cout << "Initializing ConvBlock with:" << std::endl;
     std::cout << "in_channels: " << in_channels << std::endl;
@@ -365,7 +366,11 @@ ConvBlock::ConvBlock(int in_channels, int out_channels, int kernel_size,
 
 // Destructor frees GPU memory
 ConvBlock::~ConvBlock() {
-    std::cout << "Destroying ConvBlock" << std::endl;
+    if (streams_initialized) {
+        cudaStreamDestroy(stream1);
+        cudaStreamDestroy(stream2);
+        cudaStreamDestroy(stream3);
+    }
     free_memory();
 }
 

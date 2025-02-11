@@ -21,6 +21,7 @@ private:
     int input_height, input_width;
     int conv_output_height, conv_output_width;
     int pool_output_height, pool_output_width;
+    bool streams_initialized;
 
     cudaStream_t stream1, stream2, stream3;
 
@@ -34,25 +35,6 @@ private:
     void clear_cache() {
         cudaDeviceSynchronize();
     }
-
-public:
-    ConvBlock(int in_channels, int out_channels, int kernel_size, 
-              int stride, int padding, int pool_size, int pool_stride, 
-              float learning_rate);{
-                streams_initialized = false;
-              }
-    ~ConvBlock(){
-        if (streams_initialized) {
-            cudaStreamDestroy(stream1);
-            cudaStreamDestroy(stream2);
-            cudaStreamDestroy(stream3);
-        }
-    };
-
-    // Forward and backward functions
-    void forward(const float* d_input, float* d_output, int batch_size, 
-                int height, int width);
-    void backward(const float* d_grad_output, float* d_grad_input, int batch_size);
     void init_streams() {
         if (!streams_initialized) {
             CHECK_CUDA_ERROR(cudaStreamCreate(&stream1));
@@ -61,4 +43,15 @@ public:
             streams_initialized = true;
         }
     }
+
+public:
+    ConvBlock(int in_channels, int out_channels, int kernel_size, 
+              int stride, int padding, int pool_size, int pool_stride, 
+              float learning_rate);
+    ~ConvBlock()
+    // Forward and backward functions
+    void forward(const float* d_input, float* d_output, int batch_size, 
+                int height, int width);
+    void backward(const float* d_grad_output, float* d_grad_input, int batch_size);
+    void init_streams()
 };

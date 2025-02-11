@@ -103,11 +103,15 @@ __global__ void backward_kernel(
 }
 
 FullyConnectedLayer::FullyConnectedLayer(int in_features, int num_classes, float learning_rate)
-    : in_features(in_features), num_classes(num_classes), learning_rate(learning_rate),weights_optimizer(learning_rate),
-      bias_optimizer(learning_rate),
-      current_batch_size(0),
-      d_input_cache(nullptr),
-      d_output_cache(nullptr)
+    : in_features(in_features), 
+    num_classes(num_classes), 
+    learning_rate(learning_rate),
+    weights_optimizer(learning_rate),
+    bias_optimizer(learning_rate),
+    current_batch_size(0),
+    d_input_cache(nullptr),
+    d_output_cache(nullptr),
+    streams_initialized(false)
     {
     
     // Initialize weights and biases on CPU
@@ -141,6 +145,11 @@ FullyConnectedLayer::FullyConnectedLayer(int in_features, int num_classes, float
 }
 
 FullyConnectedLayer::~FullyConnectedLayer() {
+    if (streams_initialized) {
+        cudaStreamDestroy(stream1);
+        cudaStreamDestroy(stream2);
+        cudaStreamDestroy(stream3);
+    }
     free_memory();
 }
 
@@ -207,15 +216,16 @@ void FullyConnectedLayer::backward(const uint8_t* d_labels, float* d_grad_input,
     CHECK_CUDA_ERROR(cudaMalloc(&d_grad_biases, num_classes * sizeof(float)));
     
     // Zero out gradients
-    CHECK_CUDA_ERROR(cudaMemset(d_grad_weights, 0, 
-                               num_classes * in_features * sizeof(float)));
-    CHECK_CUDA_ERROR(cudaMemset(d_grad_biases, 0, num_classes * sizeof(float)));
-    CHECK_CUDA_ERROR(cudaMemset(d_grad_input, 0, 
-                               batch_size * in_features * sizeof(float)));
+    HECK_CUDA_ERROR(cudaMemsetAsync(d_grad_weights, 0, 
+                               num_classes * in_features * sizeof(float), stream1));
+    CHECK_CUDA_ERROR(cudaMemsetAsync(d_grad_biases, 0, 
+                               num_classes * sizeof(float), stream2));
+    CHECK_CUDA_ERROR(cudaMemsetAsync(d_grad_input, 0, 
+                               batch_size * in_features * sizeof(float), stream3));
     
     // Compute gradients
     dim3 grid(batch_size, num_classes);
-    backward_kernel<<<grid, 1>>>(
+    backward_kernel<<<grid, 1, 0, stream1>>>(
         d_output_cache, d_labels,
         d_input_cache, d_weights,
         d_grad_input, d_grad_weights, d_grad_biases,
@@ -226,8 +236,8 @@ void FullyConnectedLayer::backward(const uint8_t* d_labels, float* d_grad_input,
     // Update weights and biases
     const float update_factor = -learning_rate;
     
-    weights_optimizer.update(d_weights, d_grad_weights);
-    bias_optimizer.update(d_biases, d_grad_biases);
+    weights_optimizer.update(d_weights, d_grad_weights, stream2);
+    bias_optimizer.update(d_biases, d_grad_biases, stream3);
     
     // Free temporary memory
     cudaFree(d_grad_weights);
