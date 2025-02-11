@@ -68,9 +68,9 @@ int main() {
 
 
         // Training hyperparameters
-        const int batch_size = 512;
-        const int num_epochs = 5;
-        const float learning_rate = 0.01f;
+        const std::vector<int> batch_sizes = {32, 64, 128, 256, 512, 1024};
+        const int num_epochs = 1;
+        const float learning_rate = 0.005f;
         
         // Initialize dataset
         std::cout << "Initializing dataset..." << std::endl;
@@ -93,57 +93,71 @@ int main() {
         float *d_fc_output = nullptr;
         float *d_grad_conv_output = nullptr;
         float *d_grad_input = nullptr;
-
-        // Allocate memory
-        CHECK_CUDA_ERROR(cudaMalloc(&d_batch_images, batch_size * 3 * 32 * 32 * sizeof(float)));
-        CHECK_CUDA_ERROR(cudaMalloc(&d_batch_labels, batch_size * 10 * sizeof(uint8_t)));
-        CHECK_CUDA_ERROR(cudaMalloc(&d_conv_output, batch_size * 32 * 16 * 16 * sizeof(float)));
-        CHECK_CUDA_ERROR(cudaMalloc(&d_fc_output, batch_size * 10 * sizeof(float)));
-        CHECK_CUDA_ERROR(cudaMalloc(&d_grad_conv_output, batch_size * 32 * 16 * 16 * sizeof(float)));
-        CHECK_CUDA_ERROR(cudaMalloc(&d_grad_input, batch_size * 3 * 32 * 32 * sizeof(float)));
         
-        cudaStream_t stream;
-        CHECK_CUDA_ERROR(cudaStreamCreate(&stream));
-
-        // Training loop
-        std::cout << "Starting training..." << std::endl;
-        for (int epoch = 0; epoch < num_epochs; ++epoch) {
-            float epoch_loss = 0.0f;
-            float epoch_accuracy = 0.0f;
-            auto epoch_start = std::chrono::high_resolution_clock::now();
-
-            for (int batch = 0; batch < num_batches; ++batch) {
-                // Get batch data
-                dataset.get_batch_data(d_batch_images, d_batch_labels, batch, batch_size);
-
-                // Forward pass
-                conv1.forward(d_batch_images, d_conv_output, batch_size, 32, 32);
-                fc.forward(d_conv_output, d_fc_output, batch_size);
-
-                // Compute loss and accuracy
-                float batch_loss = fc.compute_loss(d_batch_labels, batch_size);
-                float batch_accuracy = calculate_accuracy(d_fc_output, d_batch_labels, batch_size);
-
-                epoch_loss += batch_loss;
-                epoch_accuracy += batch_accuracy;
-                
-                // Backward pass
-                fc.backward(d_batch_labels, d_grad_conv_output, batch_size);
-                conv1.backward(d_grad_conv_output, d_grad_input, batch_size);
-
-            }
-
-            auto epoch_end = std::chrono::high_resolution_clock::now();
-            auto duration = std::chrono::duration_cast<std::chrono::seconds>(epoch_end - epoch_start);
-
-            epoch_loss /= num_batches;
-            epoch_accuracy /= num_batches;
-
-            std::cout << "\nEpoch " << epoch + 1 << "/" << num_epochs 
-                      << " - Loss: " << epoch_loss 
-                      << " - Accuracy: " << epoch_accuracy * 100 << "%" 
-                      << " - Time: " << duration.count() << "s" << std::endl;
+        for (int batch_size : batch_sizes) {
+            std::cout << "\n=== Testing Batch Size: " << batch_size << " ===" << std::endl;
+            // Allocate memory
+            CHECK_CUDA_ERROR(cudaMalloc(&d_batch_images, batch_size * 3 * 32 * 32 * sizeof(float)));
+            CHECK_CUDA_ERROR(cudaMalloc(&d_batch_labels, batch_size * 10 * sizeof(uint8_t)));
+            CHECK_CUDA_ERROR(cudaMalloc(&d_conv_output, batch_size * 32 * 16 * 16 * sizeof(float)));
+            CHECK_CUDA_ERROR(cudaMalloc(&d_fc_output, batch_size * 10 * sizeof(float)));
+            CHECK_CUDA_ERROR(cudaMalloc(&d_grad_conv_output, batch_size * 32 * 16 * 16 * sizeof(float)));
+            CHECK_CUDA_ERROR(cudaMalloc(&d_grad_input, batch_size * 3 * 32 * 32 * sizeof(float)));
             
+            cudaStream_t stream;
+            CHECK_CUDA_ERROR(cudaStreamCreate(&stream));
+
+            // Training loop
+            std::cout << "Starting training..." << std::endl;
+            for (int epoch = 0; epoch < num_epochs; ++epoch) {
+                float epoch_loss = 0.0f;
+                float epoch_accuracy = 0.0f;
+                auto epoch_start = std::chrono::high_resolution_clock::now();
+
+                for (int batch = 0; batch < num_batches; ++batch) {
+                    // Get batch data
+                    dataset.get_batch_data(d_batch_images, d_batch_labels, batch, batch_size);
+
+                    // Forward pass
+                    conv1.forward(d_batch_images, d_conv_output, batch_size, 32, 32);
+                    fc.forward(d_conv_output, d_fc_output, batch_size);
+
+                    // Compute loss and accuracy
+                    float batch_loss = fc.compute_loss(d_batch_labels, batch_size);
+                    float batch_accuracy = calculate_accuracy(d_fc_output, d_batch_labels, batch_size);
+
+                    epoch_loss += batch_loss;
+                    epoch_accuracy += batch_accuracy;
+                    
+                    // Backward pass
+                    fc.backward(d_batch_labels, d_grad_conv_output, batch_size);
+                    conv1.backward(d_grad_conv_output, d_grad_input, batch_size);
+
+                }
+
+                auto epoch_end = std::chrono::high_resolution_clock::now();
+                auto duration = std::chrono::duration_cast<std::chrono::seconds>(epoch_end - epoch_start);
+
+                epoch_loss /= num_batches;
+                epoch_accuracy /= num_batches;
+
+                std::cout << "\nEpoch " << epoch + 1 << "/" << num_epochs 
+                        << " - Loss: " << epoch_loss 
+                        << " - Accuracy: " << epoch_accuracy * 100 << "%" 
+                        << " - Time: " << duration.count() << "s" << std::endl;
+                
+            }
+            std::cout << "GPU Implementation:" << std::endl;
+            std::cout << "Time: " << duration.count() << "s" << std::endl;
+            std::cout << "Accuracy: " << epoch_accuracy * 100 << "%" << std::endl;
+
+            // Free GPU memory
+            cudaFree(d_batch_images);
+            cudaFree(d_batch_labels);
+            cudaFree(d_conv_output);
+            cudaFree(d_fc_output);
+            cudaFree(d_grad_conv_output);
+            cudaFree(d_grad_input);
         }
 
         // Reset device
