@@ -567,6 +567,7 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
         pool_output_width
     );
     CHECK_LAST_CUDA_ERROR();
+    cudaDeviceSynchronize();
     // Launch convolution backward
     dim3 blockDim(BLOCK_SIZE, BLOCK_SIZE);
     dim3 gridDim(
@@ -596,7 +597,32 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
         conv_output_width
     );
     CHECK_LAST_CUDA_ERROR();
-
+    cudaDeviceSynchronize();
+    
+    const float max_grad_norm = 1.0f;  // Adjust this value if needed
+    size_t weight_size = out_channels * in_channels * kernel_size * kernel_size;
+    
+    dim3 clip_block(256);
+    dim3 clip_grid((weight_size + clip_block.x - 1) / clip_block.x);
+    
+    // Clip weight gradients
+    clip_gradients_kernel<<<clip_grid, clip_block>>>(
+        d_grad_weights, 
+        weight_size, 
+        max_grad_norm
+    );
+    CHECK_LAST_CUDA_ERROR();
+    
+    // Clip bias gradients
+    dim3 clip_bias_grid((out_channels + clip_block.x - 1) / clip_block.x);
+    clip_gradients_kernel<<<clip_bias_grid, clip_block>>>(
+        d_grad_biases, 
+        out_channels, 
+        max_grad_norm
+    );
+    CHECK_LAST_CUDA_ERROR();
+    
+    cudaDeviceSynchronize();
     // Update parameters using optimizers in separate streams
     weights_optimizer.update(d_weights, d_grad_weights, stream2);
     bias_optimizer.update(d_biases, d_grad_biases, stream3);
