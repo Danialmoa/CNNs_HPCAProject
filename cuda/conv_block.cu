@@ -194,7 +194,10 @@ __global__ void conv_backward_kernel(
     // Load gradient and apply ReLU derivative
     if (h < output_height && w < output_width && b < batch_size) {
         int output_idx = ((b * out_channels + oc) * output_height + h) * output_width + w;
-        s_grad[ty][tx] = grad_output[output_idx] * (relu_output[output_idx] > 0 ? 1.0f : 0.0f);
+        const float alpha = 0.01f;  // Leaky ReLU slope
+        float val = relu_output[output_idx];
+        float relu_deriv = (val > 0.0f) ? 1.0f : alpha;
+        s_grad[ty][tx] = grad_output[output_idx] * relu_deriv;
     } else {
         s_grad[ty][tx] = 0.0f;
     }
@@ -334,7 +337,7 @@ ConvBlock::ConvBlock(int in_channels, int out_channels, int kernel_size,
     }
     
     // Initialize weights and biases on CPU
-    std::vector<float> h_weights(out_channels * in_channels * kernel_size * kernel_size);
+    std::vector<float> h_weights(in_channels * kernel_size * kernel_size);
     std::vector<float> h_biases(out_channels);
     
     // Xavier/Glorot initialization for weights
