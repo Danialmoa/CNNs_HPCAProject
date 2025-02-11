@@ -613,9 +613,6 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
     grad_output_avg /= h_grad_output.size();
 
     // Check weight gradients
-    size_t weight_size = out_channels * in_channels * kernel_size * kernel_size;
-    std::vector<float> h_grad_weights(weight_size);
-    std::vector<float> h_weights(weight_size);
     
     cudaMemcpy(h_grad_weights.data(), d_grad_weights, weight_size * sizeof(float), cudaMemcpyDeviceToHost);
     cudaMemcpy(h_weights.data(), d_weights, weight_size * sizeof(float), cudaMemcpyDeviceToHost);
