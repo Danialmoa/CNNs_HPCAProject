@@ -70,12 +70,6 @@ void AdamOptimizer::init(size_t num_params) {
     t = 0;
 }
 
-int getOptimalBlockSize() {
-    int maxThreads;
-    cudaDeviceGetAttribute(&maxThreads, cudaDevAttrMaxThreadsPerBlock, 0);
-    return std::min(256, maxThreads);
-}
-
 void AdamOptimizer::update(float* d_params, const float* d_gradients, cudaStream_t stream) {
     if (!d_m || !d_v) {
         throw std::runtime_error("Adam optimizer not initialized!");
@@ -86,7 +80,7 @@ void AdamOptimizer::update(float* d_params, const float* d_gradients, cudaStream
     float beta2_t = 1.0f - std::pow(beta2, t);
 
     // Calculate number of blocks needed
-    const int block_size = getOptimalBlockSize();
+    const int block_size = 256;
     const int num_blocks = (param_size + block_size - 1) / block_size;
 
     // Launch kernel
