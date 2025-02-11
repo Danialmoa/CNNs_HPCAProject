@@ -598,9 +598,8 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
     );
     CHECK_LAST_CUDA_ERROR();
     cudaDeviceSynchronize();
-    
-    const float max_grad_norm = 1.0f;  // Adjust this value if needed
-    size_t weight_size = out_channels * in_channels * kernel_size * kernel_size;
+
+    const float max_grad_norm = 1.0f; 
     
     dim3 clip_block(256);
     dim3 clip_grid((weight_size + clip_block.x - 1) / clip_block.x);
