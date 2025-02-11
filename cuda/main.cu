@@ -76,7 +76,7 @@ int main() {
         // Training hyperparameters
         const std::vector<int> batch_sizes = {512};
         const int num_epochs = 20;
-        const float learning_rate = 0.005f;
+        const float learning_rate = 0.001f;
         
         // Initialize dataset
         std::cout << "Initializing dataset..." << std::endl;
