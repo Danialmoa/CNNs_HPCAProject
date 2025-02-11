@@ -145,7 +145,7 @@ int main() {
                 }
 
                 auto epoch_end = std::chrono::high_resolution_clock::now();
-                auto duration = std::chrono::duration_cast<std::chrono::seconds>(epoch_end - epoch_start);
+                auto duration = std::chrono::duration_cast<std::chrono::microseconds>(epoch_end - epoch_start);
 
                 epoch_loss /= num_batches;
                 epoch_accuracy /= num_batches;
@@ -153,7 +153,7 @@ int main() {
                 std::cout << "\nEpoch " << epoch + 1 << "/" << num_epochs 
                         << " - Loss: " << epoch_loss 
                         << " - Accuracy: " << epoch_accuracy * 100 << "%" 
-                        << " - Time: " << duration.count() << "s" << std::endl;
+                        << " - Time: " << duration.count() << "ms" << std::endl;
                 
             }
 
