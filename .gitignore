@@ -1,3 +1,4 @@
 build/
 cuda/build/
 cpu/cpucode
+.vscode/
