@@ -2,12 +2,12 @@
 #include <vector>
 #include <cuda_runtime.h>
 
-// Declare the kernel
+// Convolution forward kernel
 __global__ void conv_forward_kernel(
-    const float* input,
-    const float* weights,
-    const float* biases,
-    float* output,
+    const float* input,           // [batch, in_channels, height, width]
+    const float* weights,         // [out_channels, in_channels, kernel, kernel]
+    const float* biases,          // [out_channels]
+    float* output,                // [batch, out_channels, out_height, out_width]
     int batch_size,
     int in_channels,
     int out_channels,
@@ -18,9 +18,35 @@ __global__ void conv_forward_kernel(
     int padding,
     int out_height,
     int out_width
-);
+) {
+    const int x = blockIdx.x * blockDim.x + threadIdx.x;
+    const int y = blockIdx.y * blockDim.y + threadIdx.y;
+    const int out_ch = blockIdx.z % out_channels;
+    const int batch = blockIdx.z / out_channels;
+    
+    if (x >= out_width || y >= out_height || out_ch >= out_channels || batch >= batch_size) return;
+    
+    float sum = biases[out_ch];
+    
+    for (int in_ch = 0; in_ch < in_channels; in_ch++) {
+        for (int kh = 0; kh < kernel_size; kh++) {
+            for (int kw = 0; kw < kernel_size; kw++) {
+                int h_in = y * stride - padding + kh;
+                int w_in = x * stride - padding + kw;
+                
+                if (h_in >= 0 && h_in < height && w_in >= 0 && w_in < width) {
+                    int input_idx = ((batch * in_channels + in_ch) * height + h_in) * width + w_in;
+                    int weight_idx = ((out_ch * in_channels + in_ch) * kernel_size + kh) * kernel_size + kw;
+                    sum += input[input_idx] * weights[weight_idx];
+                }
+            }
+        }
+    }
+    
+    output[((batch * out_channels + out_ch) * out_height + y) * out_width + x] = sum;
+}
 
-// CPU reference implementation for validation
+// CPU reference implementation
 void cpu_convolution(
     const float* input,
     const float* weights,
@@ -80,6 +106,15 @@ int main() {
     std::vector<float> h_output(batch_size * out_channels * out_height * out_width);
     std::vector<float> h_output_cpu(h_output.size());
 
+    // Print input data
+    std::cout << "Input data (4x4):\n";
+    for (int h = 0; h < height; h++) {
+        for (int w = 0; w < width; w++) {
+            std::cout << h_input[h * width + w] << " ";
+        }
+        std::cout << "\n";
+    }
+
     // Allocate device memory
     float *d_input, *d_weights, *d_biases, *d_output;
     cudaMalloc(&d_input, h_input.size() * sizeof(float));
@@ -122,15 +157,30 @@ int main() {
                    batch_size, in_channels, out_channels, height, width,
                    kernel_size, stride, padding, out_height, out_width);
 
+    // Print and compare results
+    std::cout << "\nGPU Output:\n";
+    for (int h = 0; h < out_height; h++) {
+        for (int w = 0; w < out_width; w++) {
+            std::cout << h_output[h * out_width + w] << " ";
+        }
+        std::cout << "\n";
+    }
+
+    std::cout << "\nCPU Output:\n";
+    for (int h = 0; h < out_height; h++) {
+        for (int w = 0; w < out_width; w++) {
+            std::cout << h_output_cpu[h * out_width + w] << " ";
+        }
+        std::cout << "\n";
+    }
+
     // Compare results
     float max_diff = 0.0f;
     for (size_t i = 0; i < h_output.size(); i++) {
         float diff = std::abs(h_output_cpu[i] - h_output[i]);
         max_diff = std::max(max_diff, diff);
-        std::cout << "Index " << i << ": CPU=" << h_output_cpu[i] 
-                 << ", GPU=" << h_output[i] << ", diff=" << diff << std::endl;
     }
-    std::cout << "Maximum difference between CPU and GPU: " << max_diff << std::endl;
+    std::cout << "\nMaximum difference between CPU and GPU: " << max_diff << std::endl;
 
     // Cleanup
     cudaFree(d_input);
