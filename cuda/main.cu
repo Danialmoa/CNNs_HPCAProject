@@ -100,18 +100,26 @@ int main() {
             // Allocate GPU memory for data and intermediate results
             float *d_batch_images = nullptr;
             uint8_t *d_batch_labels = nullptr;
-            float *d_conv_output = nullptr;
+            float *d_conv_1_output = nullptr;
+            float *d_conv_2_output = nullptr;
+            float *d_conv_3_output = nullptr;
             float *d_fc_output = nullptr;
-            float *d_grad_conv_output = nullptr;
+            float *d_grad_conv_1_output = nullptr;
+            float *d_grad_conv_2_output = nullptr;
+            float *d_grad_conv_3_output = nullptr;
             float *d_grad_input = nullptr;
             
        
             // Allocate memory
             CHECK_CUDA_ERROR(cudaMalloc(&d_batch_images, batch_size * 3 * 32 * 32 * sizeof(float)));
             CHECK_CUDA_ERROR(cudaMalloc(&d_batch_labels, batch_size * 10 * sizeof(uint8_t)));
-            CHECK_CUDA_ERROR(cudaMalloc(&d_conv_output, batch_size * 128 * 4 * 4 * sizeof(float)));
+            CHECK_CUDA_ERROR(cudaMalloc(&d_conv_1_output, batch_size * 32 * 16 * 16 * sizeof(float)));
+            CHECK_CUDA_ERROR(cudaMalloc(&d_conv_2_output, batch_size * 64 * 8 * 8 * sizeof(float)));
+            CHECK_CUDA_ERROR(cudaMalloc(&d_conv_3_output, batch_size * 128 * 4 * 4 * sizeof(float)));
             CHECK_CUDA_ERROR(cudaMalloc(&d_fc_output, batch_size * 10 * sizeof(float)));
-            CHECK_CUDA_ERROR(cudaMalloc(&d_grad_conv_output, batch_size * 128 * 4 * 4 * sizeof(float)));
+            CHECK_CUDA_ERROR(cudaMalloc(&d_grad_conv_1_output, batch_size * 32 * 16 * 16 * sizeof(float)));
+            CHECK_CUDA_ERROR(cudaMalloc(&d_grad_conv_2_output, batch_size * 64 * 8 * 8 * sizeof(float)));
+            CHECK_CUDA_ERROR(cudaMalloc(&d_grad_conv_3_output, batch_size * 128 * 4 * 4 * sizeof(float)));
             CHECK_CUDA_ERROR(cudaMalloc(&d_grad_input, batch_size * 3 * 32 * 32 * sizeof(float)));
             
             cudaStream_t stream;
@@ -130,10 +138,10 @@ int main() {
                     dataset.get_batch_data(d_batch_images, d_batch_labels, batch, batch_size);
 
                     // Forward pass
-                    conv1.forward(d_batch_images, d_conv_output, batch_size, 32, 32);
-                    conv2.forward(d_conv_output, d_conv_output, batch_size, 16, 16);
-                    conv3.forward(d_conv_output, d_conv_output, batch_size, 8, 8);
-                    fc.forward(d_conv_output, d_fc_output, batch_size);
+                    conv1.forward(d_batch_images, d_conv_1_output, batch_size, 32, 32);
+                    conv2.forward(d_conv_1_output, d_conv_2_output, batch_size, 16, 16);
+                    conv3.forward(d_conv_2_output, d_conv_3_output, batch_size, 8, 8);
+                    fc.forward(d_conv_3_output, d_fc_output, batch_size);
 
                     // Compute loss and accuracy
                     float batch_loss = fc.compute_loss(d_batch_labels, batch_size);
@@ -143,10 +151,10 @@ int main() {
                     epoch_accuracy += batch_accuracy;
                     
                     // Backward pass
-                    fc.backward(d_batch_labels, d_grad_conv_output, batch_size);
-                    conv3.backward(d_grad_conv_output, d_grad_input, batch_size);
-                    conv2.backward(d_grad_input, d_grad_input, batch_size);
-                    conv1.backward(d_grad_input, d_grad_input, batch_size);
+                    fc.backward(d_batch_labels, d_grad_fc_output, batch_size);
+                    conv3.backward(d_grad_fc_output, d_grad_conv_3_output, batch_size);
+                    conv2.backward(d_grad_conv_3_output, d_grad_conv_2_output, batch_size);
+                    conv1.backward(d_grad_conv_2_output, d_grad_conv_1_output, batch_size);
 
                 }
 
