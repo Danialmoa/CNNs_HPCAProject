@@ -269,7 +269,19 @@ void ConvBlock::forward(const float* d_input, float* d_output,
     cudaGetDeviceProperties(&prop, 0);
     std::cout << "Max grid size Z: " << prop.maxGridSize[2] << std::endl;
 
-    // 1. Convolution with 3D grid
+    // Print more detailed debug info
+    std::cout << "Debug Info:" << std::endl;
+    std::cout << "batch_size: " << batch_size << std::endl;
+    std::cout << "in_channels: " << in_channels << std::endl;
+    std::cout << "out_channels: " << out_channels << std::endl;
+    std::cout << "height: " << height << std::endl;
+    std::cout << "width: " << width << std::endl;
+    std::cout << "kernel_size: " << kernel_size << std::endl;
+    std::cout << "stride: " << stride << std::endl;
+    std::cout << "padding: " << padding << std::endl;
+    std::cout << "conv_output_height: " << conv_output_height << std::endl;
+    std::cout << "conv_output_width: " << conv_output_width << std::endl;
+
     dim3 threadsPerBlock(16, 16);
     dim3 numBlocks(
         (conv_output_width + threadsPerBlock.x - 1) / threadsPerBlock.x,
@@ -277,11 +289,13 @@ void ConvBlock::forward(const float* d_input, float* d_output,
         batch_size * out_channels
     );
 
-    // Print debug info
-    std::cout << "Conv Launch Config:" << std::endl;
-    std::cout << "Block dims: " << threadsPerBlock.x << "x" << threadsPerBlock.y << std::endl;
-    std::cout << "Grid dims: " << numBlocks.x << "x" << numBlocks.y << "x" << numBlocks.z << std::endl;
-    
+    // Print memory sizes
+    std::cout << "Memory sizes (elements):" << std::endl;
+    std::cout << "Input: " << batch_size * in_channels * height * width << std::endl;
+    std::cout << "Weights: " << out_channels * in_channels * kernel_size * kernel_size << std::endl;
+    std::cout << "Output: " << batch_size * out_channels * conv_output_height * conv_output_width << std::endl;
+
+    // 1. Convolution with 3D grid
     conv_forward_kernel<<<numBlocks, threadsPerBlock>>>(
         d_input, d_weights, d_biases, d_conv_output_cache,
         batch_size, in_channels, out_channels,
