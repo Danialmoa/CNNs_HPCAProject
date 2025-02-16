@@ -19,14 +19,13 @@ private:
     int pool_output_height, pool_output_width;
     
     // Device pointers
-    float* d_weights;
-    float* d_biases;
-    float* d_cache;                 // Input cache for backward pass
-    float* d_conv_output_cache;     // Convolution output cache
-    float* d_relu_output_cache;     // ReLU output cache
-    int* d_pool_indices;           // Pooling indices cache (changed to int*)
+    float* d_weights;         // [out_channels, in_channels, kernel, kernel]
+    float* d_biases;          // [out_channels]
+    float* d_cache;           // Input cache for backward pass [batch, in_channels, height, width]
+    float* d_conv_output_cache; // Convolution output cache [batch, out_channels, conv_h, conv_w]
+    int* d_pool_indices;      // Pooling indices cache [batch, out_channels, pool_h, pool_w]
     
-    // CUDA streams
+    // CUDA streams for parallel execution
     cudaStream_t stream1, stream2, stream3;
     bool streams_initialized;
     
@@ -50,10 +49,12 @@ private:
     }
 
 public:
+    // Constructor and destructor
     ConvBlock(int in_channels, int out_channels, int kernel_size, 
               int stride, int padding, int pool_size, int pool_stride, 
               float learning_rate);
     ~ConvBlock();
+
     // Forward and backward functions
     void forward(const float* d_input, float* d_output, int batch_size, 
                 int height, int width);
