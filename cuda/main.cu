@@ -157,6 +157,7 @@ int main() {
                     
                     // Backward pass
                     fc.backward(d_batch_labels, d_grad_fc_output, batch_size);
+                    std::cout << "d_grad_fc_output shape: " << d_grad_fc_output << std::endl;
                     conv3.backward(d_grad_fc_output, d_grad_conv_3_output, batch_size);
                     conv2.backward(d_grad_conv_3_output, d_grad_conv_2_output, batch_size);
                     conv1.backward(d_grad_conv_2_output, d_grad_conv_1_output, batch_size);
