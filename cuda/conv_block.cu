@@ -1,8 +1,32 @@
 #include "include/conv_block.cuh"
+#include <cudnn.h>
 #include <random>
 #include <cmath>
 #include <stdexcept>
 #include <iostream>
+
+class CudnnHandle {
+public:
+    CudnnHandle() {
+        CHECK_CUDNN(cudnnCreate(&handle));
+    }
+    ~CudnnHandle() {
+        cudnnDestroy(handle);
+    }
+    cudnnHandle_t get() { return handle; }
+private:
+    cudnnHandle_t handle;
+};
+
+#define CHECK_CUDNN(expression) \
+    { \
+        cudnnStatus_t status = (expression); \
+        if (status != CUDNN_STATUS_SUCCESS) { \
+            std::cerr << "CUDNN error on line " << __LINE__ << ": " \
+                      << cudnnGetErrorString(status) << std::endl; \
+            throw std::runtime_error("CUDNN error"); \
+        } \
+    }
 
 #define BLOCK_SIZE 16
 #define KERNEL_SIZE 3
@@ -254,14 +278,24 @@ ConvBlock::ConvBlock(int in_ch, int out_ch, int k_size,
                      float lr) 
     : in_channels(in_ch), out_channels(out_ch), kernel_size(k_size),
       stride(s), padding(p), pool_size(pool_s), pool_stride(pool_str),
-      learning_rate(lr), current_batch_size(0), streams_initialized(false),
-      weights_optimizer(lr), bias_optimizer(lr) {
+      learning_rate(lr), current_batch_size(0) {
     
-    // Initialize weights and biases
-    std::vector<float> h_weights(out_channels * in_channels * kernel_size * kernel_size);
+    // Create cuDNN handles and descriptors
+    cudnnCreate(&cudnn_handle);
+    
+    // Create tensor descriptors
+    CHECK_CUDNN(cudnnCreateTensorDescriptor(&input_descriptor));
+    CHECK_CUDNN(cudnnCreateTensorDescriptor(&output_descriptor));
+    CHECK_CUDNN(cudnnCreateTensorDescriptor(&conv_descriptor));
+    CHECK_CUDNN(cudnnCreateFilterDescriptor(&filter_descriptor));
+    CHECK_CUDNN(cudnnCreateConvolutionDescriptor(&convolution_descriptor));
+    CHECK_CUDNN(cudnnCreatePoolingDescriptor(&pooling_descriptor));
+    
+    // Initialize weights with Xavier initialization
+    size_t weight_size = out_channels * in_channels * kernel_size * kernel_size;
+    std::vector<float> h_weights(weight_size);
     std::vector<float> h_biases(out_channels, 0.0f);
     
-    // Xavier initialization
     float std_dev = sqrt(2.0f / (in_channels * kernel_size * kernel_size));
     std::random_device rd;
     std::mt19937 gen(rd());
@@ -272,198 +306,246 @@ ConvBlock::ConvBlock(int in_ch, int out_ch, int k_size,
     }
     
     // Allocate and copy weights and biases to GPU
-    CHECK_CUDA_ERROR(cudaMalloc(&d_weights, h_weights.size() * sizeof(float)));
-    CHECK_CUDA_ERROR(cudaMalloc(&d_biases, h_biases.size() * sizeof(float)));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_weights, weight_size * sizeof(float)));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_biases, out_channels * sizeof(float)));
     
     CHECK_CUDA_ERROR(cudaMemcpy(d_weights, h_weights.data(), 
-                               h_weights.size() * sizeof(float), 
+                               weight_size * sizeof(float), 
                                cudaMemcpyHostToDevice));
     CHECK_CUDA_ERROR(cudaMemcpy(d_biases, h_biases.data(), 
-                               h_biases.size() * sizeof(float), 
+                               out_channels * sizeof(float), 
                                cudaMemcpyHostToDevice));
+                               
+    // Set pooling descriptor
+    CHECK_CUDNN(cudnnSetPooling2dDescriptor(
+        pooling_descriptor,
+        CUDNN_POOLING_MAX,
+        CUDNN_NOT_PROPAGATE_NAN,
+        pool_size, pool_size,    // window height and width
+        0, 0,                    // vertical and horizontal padding
+        pool_stride, pool_stride // vertical and horizontal stride
+    ));
 }
 
 // Forward pass
 void ConvBlock::forward(const float* d_input, float* d_output, 
                        int batch_size, int height, int width) {
-    // Set dimensions
-    input_height = height;
-    input_width = width;
-    conv_output_height = (height + 2 * padding - kernel_size) / stride + 1;
-    conv_output_width = (width + 2 * padding - kernel_size) / stride + 1;
-    pool_output_height = (conv_output_height - pool_size) / pool_stride + 1;
-    pool_output_width = (conv_output_width - pool_size) / pool_stride + 1;
-    
     if (batch_size != current_batch_size) {
         allocate_memory(batch_size);
+        current_batch_size = batch_size;
+        
+        // Set tensor descriptors
+        CHECK_CUDNN(cudnnSetTensor4dDescriptor(
+            input_descriptor,
+            CUDNN_TENSOR_NCHW,
+            CUDNN_DATA_FLOAT,
+            batch_size, in_channels, height, width
+        ));
+        
+        // Set filter descriptor
+        CHECK_CUDNN(cudnnSetFilter4dDescriptor(
+            filter_descriptor,
+            CUDNN_DATA_FLOAT,
+            CUDNN_TENSOR_NCHW,
+            out_channels, in_channels, kernel_size, kernel_size
+        ));
+        
+        // Set convolution descriptor
+        CHECK_CUDNN(cudnnSetConvolution2dDescriptor(
+            convolution_descriptor,
+            padding, padding,     // zero-padding
+            stride, stride,       // stride
+            1, 1,                // dilation
+            CUDNN_CROSS_CORRELATION,
+            CUDNN_DATA_FLOAT
+        ));
+        
+        // Get output dimensions
+        CHECK_CUDNN(cudnnGetConvolution2dForwardOutputDim(
+            convolution_descriptor,
+            input_descriptor,
+            filter_descriptor,
+            &batch_size,
+            &out_channels,
+            &conv_output_height,
+            &conv_output_width
+        ));
+        
+        // Set output descriptor
+        CHECK_CUDNN(cudnnSetTensor4dDescriptor(
+            output_descriptor,
+            CUDNN_TENSOR_NCHW,
+            CUDNN_DATA_FLOAT,
+            batch_size, out_channels, conv_output_height, conv_output_width
+        ));
+        
+        // Find best convolution algorithm
+        CHECK_CUDNN(cudnnGetConvolutionForwardAlgorithm(
+            cudnn_handle,
+            input_descriptor,
+            filter_descriptor,
+            convolution_descriptor,
+            output_descriptor,
+            CUDNN_CONVOLUTION_FWD_PREFER_FASTEST,
+            0,
+            &conv_algorithm
+        ));
+        
+        // Get workspace size
+        CHECK_CUDNN(cudnnGetConvolutionForwardWorkspaceSize(
+            cudnn_handle,
+            input_descriptor,
+            filter_descriptor,
+            convolution_descriptor,
+            output_descriptor,
+            conv_algorithm,
+            &workspace_size
+        ));
+        
+        // Allocate workspace
+        if (workspace_size > 0) {
+            if (d_workspace) cudaFree(d_workspace);
+            CHECK_CUDA_ERROR(cudaMalloc(&d_workspace, workspace_size));
+        }
     }
-
+    
     // Cache input for backward pass
     CHECK_CUDA_ERROR(cudaMemcpy(d_cache, d_input, 
         batch_size * in_channels * height * width * sizeof(float), 
         cudaMemcpyDeviceToDevice));
-
-    // Calculate grid and block dimensions
-    dim3 threadsPerBlock(BLOCK_SIZE, BLOCK_SIZE);
-    dim3 numBlocks(
-        (conv_output_width + BLOCK_SIZE - 1) / BLOCK_SIZE,
-        (conv_output_height + BLOCK_SIZE - 1) / BLOCK_SIZE,
-        out_channels
-    );
-
-    // Calculate shared memory size
-    size_t shared_mem_size = 
-        ((BLOCK_SIZE + kernel_size - 1) * (BLOCK_SIZE + kernel_size - 1) + // Input tile
-         kernel_size * kernel_size) *                                       // Weights
-        sizeof(float);
-
-    // Launch kernel with dynamic shared memory
-    for (int b = 0; b < batch_size; b++) {
-        conv_forward_kernel<<<numBlocks, threadsPerBlock, shared_mem_size>>>(
-            d_input + b * in_channels * height * width,
-            d_weights,
-            d_biases,
-            d_conv_output_cache + b * out_channels * conv_output_height * conv_output_width,
-            1,  // Process one batch at a time
-            in_channels,
-            out_channels,
-            height,
-            width,
-            kernel_size,
-            stride,
-            padding,
-            conv_output_height,
-            conv_output_width
-        );
-        CHECK_LAST_CUDA_ERROR();
-    }
     
-    // 2. ReLU
-    const int total_conv_elements = batch_size * out_channels * conv_output_height * conv_output_width;
-    const int relu_threads = 256;
-    const int relu_blocks = (total_conv_elements + relu_threads - 1) / relu_threads;
+    const float alpha = 1.0f;
+    const float beta = 0.0f;
     
-    relu_kernel<<<relu_blocks, relu_threads>>>(
-        d_conv_output_cache, total_conv_elements
-    );
-    CHECK_LAST_CUDA_ERROR();
+    // Perform convolution
+    CHECK_CUDNN(cudnnConvolutionForward(
+        cudnn_handle,
+        &alpha,
+        input_descriptor, d_input,
+        filter_descriptor, d_weights,
+        convolution_descriptor,
+        conv_algorithm,
+        d_workspace,
+        workspace_size,
+        &beta,
+        output_descriptor, d_conv_output_cache
+    ));
     
-    // 3. Max Pooling
-    dim3 poolThreads(16, 16);
-    dim3 poolBlocks(
-        (pool_output_width + poolThreads.x - 1) / poolThreads.x,
-        (pool_output_height + poolThreads.y - 1) / poolThreads.y,
-        batch_size * out_channels
-    );
+    // Add biases
+    CHECK_CUDNN(cudnnAddTensor(
+        cudnn_handle,
+        &alpha,
+        bias_descriptor, d_biases,
+        &alpha,
+        output_descriptor, d_conv_output_cache
+    ));
     
-    max_pool_kernel<<<poolBlocks, poolThreads>>>(
-        d_conv_output_cache, d_output, d_pool_indices,
-        batch_size, out_channels,
-        conv_output_height, conv_output_width,
-        pool_size, pool_stride,
-        pool_output_height, pool_output_width
-    );
-    CHECK_LAST_CUDA_ERROR();
+    // ReLU activation
+    CHECK_CUDNN(cudnnActivationForward(
+        cudnn_handle,
+        activation_descriptor,
+        &alpha,
+        output_descriptor, d_conv_output_cache,
+        &beta,
+        output_descriptor, d_conv_output_cache
+    ));
+    
+    // Max pooling
+    CHECK_CUDNN(cudnnPoolingForward(
+        cudnn_handle,
+        pooling_descriptor,
+        &alpha,
+        output_descriptor, d_conv_output_cache,
+        &beta,
+        pooling_descriptor, d_output
+    ));
 }
 
 // Backward pass implementation
 void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int batch_size) {
-    if (!streams_initialized) {
-        init_streams();
-    }
+    const float alpha = 1.0f;
+    const float beta = 0.0f;
     
-    // Allocate temporary gradients
-    float *d_grad_weights, *d_grad_biases;
-    size_t weight_size = out_channels * in_channels * kernel_size * kernel_size;
-    size_t conv_size = batch_size * out_channels * conv_output_height * conv_output_width;
+    // Pooling backward
+    CHECK_CUDNN(cudnnPoolingBackward(
+        cudnn_handle,
+        pooling_descriptor,
+        &alpha,
+        pooling_descriptor, d_output,
+        pooling_descriptor, d_grad_output,
+        output_descriptor, d_conv_output_cache,
+        &beta,
+        output_descriptor, d_conv_grad_cache
+    ));
     
-    CHECK_CUDA_ERROR(cudaMalloc(&d_grad_weights, weight_size * sizeof(float)));
-    CHECK_CUDA_ERROR(cudaMalloc(&d_grad_biases, out_channels * sizeof(float)));
+    // ReLU backward
+    CHECK_CUDNN(cudnnActivationBackward(
+        cudnn_handle,
+        activation_descriptor,
+        &alpha,
+        output_descriptor, d_conv_output_cache,
+        output_descriptor, d_conv_grad_cache,
+        output_descriptor, d_conv_output_cache,
+        &beta,
+        output_descriptor, d_conv_grad_cache
+    ));
     
-    // Zero out gradients
-    CHECK_CUDA_ERROR(cudaMemset(d_grad_weights, 0, weight_size * sizeof(float)));
-    CHECK_CUDA_ERROR(cudaMemset(d_grad_biases, 0, out_channels * sizeof(float)));
-    CHECK_CUDA_ERROR(cudaMemset(d_grad_input, 0, batch_size * in_channels * input_height * input_width * sizeof(float)));
+    // Convolution backward data
+    CHECK_CUDNN(cudnnConvolutionBackwardData(
+        cudnn_handle,
+        &alpha,
+        filter_descriptor, d_weights,
+        output_descriptor, d_conv_grad_cache,
+        convolution_descriptor,
+        conv_bwd_data_algo,
+        d_workspace,
+        workspace_size,
+        &beta,
+        input_descriptor, d_grad_input
+    ));
     
-    // Temporary buffer for gradients
-    float* d_conv_grad;
-    CHECK_CUDA_ERROR(cudaMalloc(&d_conv_grad, conv_size * sizeof(float)));
-    CHECK_CUDA_ERROR(cudaMemset(d_conv_grad, 0, conv_size * sizeof(float)));
+    // Convolution backward filter
+    CHECK_CUDNN(cudnnConvolutionBackwardFilter(
+        cudnn_handle,
+        &alpha,
+        input_descriptor, d_cache,
+        output_descriptor, d_conv_grad_cache,
+        convolution_descriptor,
+        conv_bwd_filter_algo,
+        d_workspace,
+        workspace_size,
+        &beta,
+        filter_descriptor, d_grad_weights
+    ));
     
-    // 1. Max Pool Backward
-    dim3 pool_grid(batch_size, out_channels, pool_output_height * pool_output_width);
-    max_pool_backward_kernel<<<pool_grid, 1, 0, stream1>>>(
-        d_grad_output,
-        d_conv_grad,
-        d_pool_indices,
-        batch_size,
-        out_channels,
-        conv_output_height,
-        conv_output_width,
-        pool_size,
-        pool_stride,
-        pool_output_height,
-        pool_output_width
-    );
-    CHECK_LAST_CUDA_ERROR();
-    
-    // 2. ReLU Backward
-    int block_size = 256;
-    int num_blocks = (conv_size + block_size - 1) / block_size;
-    
-    relu_backward_kernel<<<num_blocks, block_size, 0, stream2>>>(
-        d_conv_grad,
-        d_conv_output_cache,
-        d_conv_grad,
-        conv_size
-    );
-    CHECK_LAST_CUDA_ERROR();
-    
-    // 3. Convolution Backward
-    dim3 conv_grid(batch_size, out_channels, conv_output_height * conv_output_width);
-    conv_backward_kernel<<<conv_grid, 1, 0, stream3>>>(
-        d_conv_grad,
-        d_cache,
-        d_weights,
-        d_grad_input,
-        d_grad_weights,
-        d_grad_biases,
-        batch_size,
-        in_channels,
-        out_channels,
-        input_height,
-        input_width,
-        kernel_size,
-        stride,
-        padding,
-        conv_output_height,
-        conv_output_width
-    );
-    CHECK_LAST_CUDA_ERROR();
+    // Convolution backward bias
+    CHECK_CUDNN(cudnnConvolutionBackwardBias(
+        cudnn_handle,
+        &alpha,
+        output_descriptor, d_conv_grad_cache,
+        &beta,
+        bias_descriptor, d_grad_biases
+    ));
     
     // Update weights and biases using Adam optimizer
     weights_optimizer.update(d_weights, d_grad_weights, stream1);
     bias_optimizer.update(d_biases, d_grad_biases, stream2);
-    
-    // Cleanup
-    cudaFree(d_grad_weights);
-    cudaFree(d_grad_biases);
-    cudaFree(d_conv_grad);
-    
-    // Synchronize streams
-    cudaStreamSynchronize(stream1);
-    cudaStreamSynchronize(stream2);
-    cudaStreamSynchronize(stream3);
 }
 
 // Destructor
 ConvBlock::~ConvBlock() {
+    // Destroy cuDNN handles and descriptors
+    cudnnDestroyTensorDescriptor(input_descriptor);
+    cudnnDestroyTensorDescriptor(output_descriptor);
+    cudnnDestroyTensorDescriptor(conv_descriptor);
+    cudnnDestroyFilterDescriptor(filter_descriptor);
+    cudnnDestroyConvolutionDescriptor(convolution_descriptor);
+    cudnnDestroyPoolingDescriptor(pooling_descriptor);
+    cudnnDestroy(cudnn_handle);
+    
+    // Free GPU memory
     free_memory();
-    if (streams_initialized) {
-        cudaStreamDestroy(stream1);
-        cudaStreamDestroy(stream2);
-        cudaStreamDestroy(stream3);
-    }
+    if (d_workspace) cudaFree(d_workspace);
 }
 
 void ConvBlock::allocate_memory(int batch_size) {
