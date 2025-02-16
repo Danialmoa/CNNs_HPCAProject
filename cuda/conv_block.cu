@@ -545,13 +545,7 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
     size_t weight_size = out_channels * in_channels * kernel_size * kernel_size;
     size_t bias_size = out_channels;
     size_t input_size = batch_size * in_channels * input_height * input_width;
-    
-    // Create CUDA streams for parallel execution
-    cudaStream_t stream1, stream2, stream3;
-    CHECK_CUDA_ERROR(cudaStreamCreate(&stream1));
-    CHECK_CUDA_ERROR(cudaStreamCreate(&stream2));
-    CHECK_CUDA_ERROR(cudaStreamCreate(&stream3));
-    
+     
     // Allocate temporary gradient buffers
     float *d_grad_weights, *d_grad_biases;
     CHECK_CUDA_ERROR(cudaMalloc(&d_grad_weights, weight_size * sizeof(float)));
@@ -672,7 +666,5 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
     CHECK_CUDA_ERROR(cudaFree(d_grad_weights));
     CHECK_CUDA_ERROR(cudaFree(d_grad_biases));
     CHECK_CUDA_ERROR(cudaFree(d_unpooled_grad));
-    CHECK_CUDA_ERROR(cudaStreamDestroy(stream1));
-    CHECK_CUDA_ERROR(cudaStreamDestroy(stream2));
-    CHECK_CUDA_ERROR(cudaStreamDestroy(stream3));
+
 }
