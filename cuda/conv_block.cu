@@ -264,9 +264,13 @@ void ConvBlock::forward(const float* d_input, float* d_output,
         batch_size * in_channels * height * width * sizeof(float), 
         cudaMemcpyDeviceToDevice));
 
-    // 1. Convolution
-    // Use 2D block for better spatial locality
-    dim3 threadsPerBlock(16, 16);  // 256 threads total
+    // Get device properties
+    cudaDeviceProp prop;
+    cudaGetDeviceProperties(&prop, 0);
+    std::cout << "Max grid size Z: " << prop.maxGridSize[2] << std::endl;
+
+    // 1. Convolution with 3D grid
+    dim3 threadsPerBlock(16, 16);
     dim3 numBlocks(
         (conv_output_width + threadsPerBlock.x - 1) / threadsPerBlock.x,
         (conv_output_height + threadsPerBlock.y - 1) / threadsPerBlock.y,
@@ -428,9 +432,6 @@ void ConvBlock::allocate_memory(int batch_size) {
     size_t conv_size = batch_size * out_channels * conv_output_height * conv_output_width;
     size_t input_size = batch_size * in_channels * input_height * input_width;
 
-    std::cout << "conv_size: " << conv_size << std::endl;
-    std::cout << "input_size: " << input_size << std::endl;
-    
     // Allocate memory
     CHECK_CUDA_ERROR(cudaMalloc(&d_conv_output_cache, conv_size * sizeof(float)));
     CHECK_CUDA_ERROR(cudaMalloc(&d_pool_indices, conv_size * sizeof(int)));
