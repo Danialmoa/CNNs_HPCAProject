@@ -146,7 +146,7 @@ int main() {
                     // Compute loss and accuracy
                     float batch_loss = fc.compute_loss(d_batch_labels, batch_size);
                     float batch_accuracy = calculate_accuracy(d_fc_output, d_batch_labels, batch_size);
-
+                    std::cout << "Batch " << batch + 1 << "/" << num_batches << " - Loss: " << batch_loss << " - Accuracy: " << batch_accuracy * 100 << "%" << std::endl;
                     epoch_loss += batch_loss;
                     epoch_accuracy += batch_accuracy;
                     
