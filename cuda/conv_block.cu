@@ -399,3 +399,40 @@ ConvBlock::~ConvBlock() {
         cudaStreamDestroy(stream3);
     }
 }
+
+void ConvBlock::allocate_memory(int batch_size) {
+    // Free existing memory if any
+    free_memory();
+    
+    // Calculate output dimensions
+    conv_output_height = (input_height + 2 * padding - kernel_size) / stride + 1;
+    conv_output_width = (input_width + 2 * padding - kernel_size) / stride + 1;
+    pool_output_height = (conv_output_height - pool_size) / pool_stride + 1;
+    pool_output_width = (conv_output_width - pool_size) / pool_stride + 1;
+    
+    // Calculate sizes
+    size_t conv_size = batch_size * out_channels * conv_output_height * conv_output_width;
+    size_t input_size = batch_size * in_channels * input_height * input_width;
+    
+    // Allocate memory
+    CHECK_CUDA_ERROR(cudaMalloc(&d_conv_output_cache, conv_size * sizeof(float)));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_pool_indices, conv_size * sizeof(int)));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_cache, input_size * sizeof(float)));
+    
+    current_batch_size = batch_size;
+}
+
+void ConvBlock::free_memory() {
+    if (d_cache) {
+        cudaFree(d_cache);
+        d_cache = nullptr;
+    }
+    if (d_conv_output_cache) {
+        cudaFree(d_conv_output_cache);
+        d_conv_output_cache = nullptr;
+    }
+    if (d_pool_indices) {
+        cudaFree(d_pool_indices);
+        d_pool_indices = nullptr;
+    }
+}
