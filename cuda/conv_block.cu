@@ -4,6 +4,8 @@
 #include <stdexcept>
 #include <iostream>
 
+#define BLOCK_SIZE 16
+#define KERNEL_SIZE 3
 
 // convolution forward kernel
 __global__ void conv_forward_kernel(
