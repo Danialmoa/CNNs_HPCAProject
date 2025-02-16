@@ -353,7 +353,7 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input,
     if (batch_size != current_batch_size) {
         allocate_memory(batch_size);
     }
-    
+
     if (!streams_initialized) {
         init_streams();
     }
@@ -455,7 +455,7 @@ ConvBlock::~ConvBlock() {
 void ConvBlock::allocate_memory(int batch_size) {
     // Free existing memory if any
     free_memory();
-
+    CHECK_CUDA_ERROR(cudaDeviceSynchronize());
     // Calculate output dimensions
     conv_output_height = (input_height + 2 * padding - kernel_size) / stride + 1;
     conv_output_width = (input_width + 2 * padding - kernel_size) / stride + 1;

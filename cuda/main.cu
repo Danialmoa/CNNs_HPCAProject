@@ -132,6 +132,11 @@ int main() {
             
             // Training loop
             std::cout << "Starting training..." << std::endl;
+            cudaError_t status;
+            size_t free_memory, total_memory;
+            cudaMemGetInfo(&free_memory, &total_memory);
+            std::cout << "Available GPU memory before training: " << free_memory / 1024 / 1024 << "MB" << std::endl;
+
 
             for (int epoch = 0; epoch < num_epochs; ++epoch) {
                 float epoch_loss = 0.0f;
@@ -160,6 +165,12 @@ int main() {
                     conv3.backward(d_grad_fc_output, d_grad_conv_3_output, batch_size, 4, 4);
                     conv2.backward(d_grad_conv_3_output, d_grad_conv_2_output, batch_size, 8, 8);
                     conv1.backward(d_grad_conv_2_output, d_grad_conv_1_output, batch_size, 16, 16);
+
+                    if (batch % 10 == 0) {  
+                        CHECK_CUDA_ERROR(cudaDeviceSynchronize());
+                        cudaMemGetInfo(&free_memory, &total_memory);
+                        std::cout << "Available GPU memory: " << free_memory / 1024 / 1024 << "MB" << std::endl;
+                    }
 
                 }
 
