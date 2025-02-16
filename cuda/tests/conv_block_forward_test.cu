@@ -25,7 +25,7 @@ int main() {
         // Test parameters
         const int batch_size = 2;
         const int in_channels = 1;
-        const int hidden_channels = 8;
+        const int hidden_channels = 4;
         const int out_channels = 2;
         const int height = 16;
         const int width = 16;
