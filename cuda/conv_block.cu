@@ -533,45 +533,37 @@ void ConvBlock::forward(const float* d_input, float* d_output, int batch_size, i
 
 // Backward pass: computes gradients and updates parameters
 void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int batch_size) {
-    if (batch_size != current_batch_size) {
-        throw std::invalid_argument("Batch size mismatch between forward and backward passes");
-    }
     if (!streams_initialized) {
-        throw std::runtime_error("Streams not initialized");
+        init_streams();
     }
 
-    
-    CHECK_CUDA_ERROR(cudaDeviceSynchronize());
     cudaStreamSynchronize(stream1);
     cudaStreamSynchronize(stream2);
     cudaStreamSynchronize(stream3);
 
-
-    // Calculate sizes
+    // Calculate sizes for each stage
+    size_t pool_output_size = batch_size * out_channels * conv_output_height * conv_output_width;
+    size_t conv_output_size = batch_size * out_channels * (conv_output_height * 2) * (conv_output_width * 2); // After unpooling
     size_t input_size = batch_size * in_channels * input_height * input_width;
-    size_t conv_output_size = batch_size * out_channels * conv_output_height * conv_output_width;
     size_t weight_size = out_channels * in_channels * kernel_size * kernel_size;
     size_t bias_size = out_channels;
-
-    int pooled_height = (conv_output_height - pool_size) / pool_stride + 1;
-    int pooled_width = (conv_output_width - pool_size) / pool_stride + 1;
 
     // Debug print
     std::cout << "\nBackward pass dimensions for ConvBlock:" << std::endl;
     std::cout << "Batch size: " << batch_size << std::endl;
-    std::cout << "Input height: " << input_height << std::endl;
-    std::cout << "Input width: " << input_width << std::endl;
-    std::cout << "In channels: " << in_channels << std::endl;
-    std::cout << "Out channels: " << out_channels << std::endl;
-    std::cout << "Output height: " << conv_output_height << std::endl;
-    std::cout << "Output width: " << conv_output_width << std::endl;
-    std::cout << "Calculated sizes:" << std::endl;
     std::cout << "Input size: " << input_size << " = " 
               << batch_size << " * " << in_channels << " * " 
               << input_height << " * " << input_width << std::endl;
+    std::cout << "Conv output size: " << conv_output_size << std::endl;
+    std::cout << "Pool output size: " << pool_output_size << std::endl;
 
-    // Allocate temporary gradient buffers
+    // Allocate temporary buffers for each stage
+    float* d_unpooled_grad;
+    float* d_relu_grad;
     float *d_grad_weights, *d_grad_biases;
+
+    CHECK_CUDA_ERROR(cudaMalloc(&d_unpooled_grad, conv_output_size * sizeof(float)));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_relu_grad, conv_output_size * sizeof(float)));
     CHECK_CUDA_ERROR(cudaMalloc(&d_grad_weights, weight_size * sizeof(float)));
     CHECK_CUDA_ERROR(cudaMalloc(&d_grad_biases, bias_size * sizeof(float)));
 
@@ -579,57 +571,58 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
     CHECK_CUDA_ERROR(cudaMemsetAsync(d_grad_weights, 0, weight_size * sizeof(float), stream1));
     CHECK_CUDA_ERROR(cudaMemsetAsync(d_grad_biases, 0, bias_size * sizeof(float), stream2));
     CHECK_CUDA_ERROR(cudaMemsetAsync(d_grad_input, 0, input_size * sizeof(float), stream3));
-    
-    
-
-    cudaStreamSynchronize(stream1);
-    cudaStreamSynchronize(stream2);
-    cudaStreamSynchronize(stream3);
-
-    // Allocate and initialize unpooled gradients
-    float* d_unpooled_grad;
-    CHECK_CUDA_ERROR(cudaMalloc(&d_unpooled_grad, conv_output_size * sizeof(float)));
     CHECK_CUDA_ERROR(cudaMemsetAsync(d_unpooled_grad, 0, conv_output_size * sizeof(float), stream1));
-    
-    cudaStreamSynchronize(stream1);
+    CHECK_CUDA_ERROR(cudaMemsetAsync(d_relu_grad, 0, conv_output_size * sizeof(float), stream2));
 
-    // Launch max pooling backward
+    // 1. Max pooling backward
     dim3 gridDimPool(batch_size, 
                     out_channels, 
-                    (pool_output_height * pool_output_width + MAX_THREADS - 1) / MAX_THREADS);
+                    (conv_output_height * conv_output_width + MAX_THREADS - 1) / MAX_THREADS);
     dim3 blockDimPool(MAX_THREADS);
     
     max_pool_backward_kernel<<<gridDimPool, blockDimPool, 0, stream1>>>(
         d_grad_output,
         d_unpooled_grad,
-        d_pool_indices,
+        d_pool_indices,  // Saved from forward pass
         batch_size,
         out_channels,
-        conv_output_height,
-        conv_output_width,
-        pool_output_height,
-        pool_output_width
+        conv_output_height * 2,  // Original height before pooling
+        conv_output_width * 2,   // Original width before pooling
+        pool_size,
+        pool_stride
     );
     CHECK_LAST_CUDA_ERROR();
-    cudaDeviceSynchronize();
     cudaStreamSynchronize(stream1);
-    // Launch convolution backward
+
+    // 2. ReLU backward
+    dim3 gridDimReLU(batch_size, 
+                     out_channels,
+                     (conv_output_height * conv_output_width + MAX_THREADS - 1) / MAX_THREADS);
+    
+    relu_backward_kernel<<<gridDimReLU, blockDimPool, 0, stream2>>>(
+        d_unpooled_grad,
+        d_relu_grad,
+        d_relu_cache,  // Saved from forward pass
+        batch_size * out_channels * conv_output_height * conv_output_width * 4
+    );
+    CHECK_LAST_CUDA_ERROR();
+    cudaStreamSynchronize(stream2);
+
+    // 3. Convolution backward
     dim3 blockDim(BLOCK_SIZE, BLOCK_SIZE);
     dim3 gridDim(
         batch_size,
         out_channels,
-        ((conv_output_height + TILE_SIZE - 1) / TILE_SIZE) * 
-        ((conv_output_width + TILE_SIZE - 1) / TILE_SIZE)
+        ((conv_output_height * 2 + TILE_SIZE - 1) / TILE_SIZE) * 
+        ((conv_output_width * 2 + TILE_SIZE - 1) / TILE_SIZE)
     );
 
     conv_backward_kernel<<<gridDim, blockDim, 0, stream1>>>(
-        d_unpooled_grad,
+        d_relu_grad,
         d_weights,
         d_grad_input,
         d_grad_weights,
         d_grad_biases,
-        d_cache,
-        d_relu_output_cache,
         batch_size,
         in_channels,
         out_channels,
@@ -637,70 +630,22 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
         input_width,
         kernel_size,
         stride,
-        padding,
-        conv_output_height,
-        conv_output_width
+        padding
     );
     CHECK_LAST_CUDA_ERROR();
-    cudaDeviceSynchronize();
     cudaStreamSynchronize(stream1);
-    
-    
-    // Update parameters using optimizers in separate streams
+
+    // Update weights and biases
     weights_optimizer.update(d_weights, d_grad_weights, stream2);
     bias_optimizer.update(d_biases, d_grad_biases, stream3);
 
-    const float max_grad_norm = 2.0f; 
-    
-    dim3 clip_block(256);
-    dim3 clip_grid((weight_size + clip_block.x - 1) / clip_block.x);
-    
-    // Clip weight gradients
-    clip_gradients_kernel<<<clip_grid, clip_block>>>(
-        d_grad_weights, 
-        weight_size, 
-        max_grad_norm
-    );
-    CHECK_LAST_CUDA_ERROR();
-    
-    // Clip bias gradients
-    dim3 clip_bias_grid((out_channels + clip_block.x - 1) / clip_block.x);
-    clip_gradients_kernel<<<clip_bias_grid, clip_block>>>(
-        d_grad_biases, 
-        out_channels, 
-        max_grad_norm
-    );
-    CHECK_LAST_CUDA_ERROR();
-
-
-    const float max_weight_val = 2.0f;
-    clip_values_kernel<<<(weight_size + 255) / 256, 256>>>(
-        d_weights,
-        weight_size,
-        -max_weight_val,
-        max_weight_val
-    );
-    cudaDeviceSynchronize();
-
-    
-    // Synchronize all streams
-    cudaStreamSynchronize(stream1);
-    cudaStreamSynchronize(stream2);
-    cudaStreamSynchronize(stream3);
-    
-    // Check for errors
-    cudaError_t err = cudaGetLastError();
-    if (err != cudaSuccess) {
-        printf("CUDA Error in backward pass: %s\n", cudaGetErrorString(err));
-    }
-    
-    // Cleanup
-    CHECK_CUDA_ERROR(cudaFree(d_grad_weights));
-    CHECK_CUDA_ERROR(cudaFree(d_grad_biases));
-    CHECK_CUDA_ERROR(cudaFree(d_unpooled_grad));
+    // Cleanup temporary memory
+    cudaFree(d_unpooled_grad);
+    cudaFree(d_relu_grad);
+    cudaFree(d_grad_weights);
+    cudaFree(d_grad_biases);
 
     cudaStreamSynchronize(stream1);
     cudaStreamSynchronize(stream2);
     cudaStreamSynchronize(stream3);
-
 }
