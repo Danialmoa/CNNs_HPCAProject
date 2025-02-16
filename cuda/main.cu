@@ -157,9 +157,9 @@ int main() {
                     
                     // Backward pass
                     fc.backward(d_batch_labels, d_grad_fc_output, batch_size);
-                    conv3.backward(d_grad_fc_output, d_grad_conv_3_output, batch_size, 8, 8);
-                    conv2.backward(d_grad_conv_3_output, d_grad_conv_2_output, batch_size, 16, 16);
-                    conv1.backward(d_grad_conv_2_output, d_grad_conv_1_output, batch_size, 32, 32);
+                    conv3.backward(d_grad_fc_output, d_grad_conv_3_output, batch_size, 4, 4);
+                    conv2.backward(d_grad_conv_3_output, d_grad_conv_2_output, batch_size, 8, 8);
+                    conv1.backward(d_grad_conv_2_output, d_grad_conv_1_output, batch_size, 16, 16);
 
                 }
 
