@@ -350,7 +350,10 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input,
     if (input_height == 0 || input_width == 0) {
         throw std::runtime_error("Input dimensions not set. Call forward() before backward()");
     }
-
+    if (batch_size != current_batch_size) {
+        allocate_memory(batch_size);
+    }
+    
     if (!streams_initialized) {
         init_streams();
     }
