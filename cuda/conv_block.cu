@@ -544,7 +544,26 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
     std::cout << "in_channels: " << in_channels << std::endl;
     std::cout << "input_height: " << input_height << std::endl;
     std::cout << "input_width: " << input_width << std::endl;
+
+    // Calculate each dimension separately for debugging
+    size_t dim1 = static_cast<size_t>(batch_size);
+    size_t dim2 = static_cast<size_t>(in_channels);
+    size_t dim3 = static_cast<size_t>(input_height);
+    size_t dim4 = static_cast<size_t>(input_width);
     
+    std::cout << "Dimension products:" << std::endl;
+    std::cout << "dim1 (batch_size): " << dim1 << std::endl;
+    std::cout << "dim1 * dim2: " << (dim1 * dim2) << std::endl;
+    std::cout << "dim1 * dim2 * dim3: " << (dim1 * dim2 * dim3) << std::endl;
+    std::cout << "dim1 * dim2 * dim3 * dim4: " << (dim1 * dim2 * dim3 * dim4) << std::endl;
+
+    size_t input_size = dim1 * dim2 * dim3 * dim4;
+    size_t total_bytes = input_size * sizeof(float);
+
+    std::cout << "Total input_size: " << input_size << std::endl;
+    std::cout << "Total bytes to set: " << total_bytes << std::endl;
+    std::cout << "d_grad_input pointer: " << d_grad_input << std::endl;
+
     cudaError_t stream_status;
     stream_status = cudaStreamQuery(stream1);
     if (stream_status != cudaSuccess && stream_status != cudaErrorNotReady) {
@@ -558,6 +577,11 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
     if (stream_status != cudaSuccess && stream_status != cudaErrorNotReady) {
         throw std::runtime_error("Stream3 is invalid");
     }
+    cudaDeviceProp prop;
+    cudaGetDeviceProperties(&prop, 0);
+    size_t total_memory = prop.totalGlobalMem;
+    std::cout << "Total GPU memory: " << total_memory << " bytes" << std::endl;
+    std::cout << "Requested memory: " << total_bytes << " bytes" << std::endl;
 
     CHECK_CUDA_ERROR(cudaDeviceSynchronize());
     cudaStreamSynchronize(stream1);
