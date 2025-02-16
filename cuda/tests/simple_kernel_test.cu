@@ -108,11 +108,13 @@ int main() {
 
     // Print input data
     std::cout << "Input data (4x4):\n";
-    for (int h = 0; h < height; h++) {
-        for (int w = 0; w < width; w++) {
-            std::cout << h_input[h * width + w] << " ";
+    for (int b = 0; b < batch_size; b++) {
+        for (int h = 0; h < height; h++) {
+            for (int w = 0; w < width; w++) {
+                std::cout << h_input[((b * in_channels + 0) * height + h) * width + w] << " ";
+            }
+            std::cout << "\n";
         }
-        std::cout << "\n";
     }
 
     // Allocate device memory
@@ -159,19 +161,23 @@ int main() {
 
     // Print and compare results
     std::cout << "\nGPU Output:\n";
-    for (int h = 0; h < out_height; h++) {
-        for (int w = 0; w < out_width; w++) {
-            std::cout << h_output[h * out_width + w] << " ";
+    for (int b = 0; b < batch_size; b++) {
+        for (int h = 0; h < out_height; h++) {
+            for (int w = 0; w < out_width; w++) {
+                std::cout << h_output[((b * out_channels + 0) * out_height + h) * out_width + w] << " ";
+            }
+            std::cout << "\n";
         }
-        std::cout << "\n";
     }
 
     std::cout << "\nCPU Output:\n";
-    for (int h = 0; h < out_height; h++) {
-        for (int w = 0; w < out_width; w++) {
-            std::cout << h_output_cpu[h * out_width + w] << " ";
+    for (int b = 0; b < batch_size; b++) {
+        for (int h = 0; h < out_height; h++) {
+            for (int w = 0; w < out_width; w++) {
+                std::cout << h_output_cpu[((b * out_channels + 0) * out_height + h) * out_width + w] << " ";
+            }
+            std::cout << "\n";
         }
-        std::cout << "\n";
     }
 
     // Compare results
