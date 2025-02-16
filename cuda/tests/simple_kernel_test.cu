@@ -86,7 +86,7 @@ void cpu_convolution(
 
 int main() {
     // Test parameters
-    const int batch_size = 1;
+    const int batch_size = 2;
     const int in_channels = 1;
     const int out_channels = 1;
     const int height = 4;
