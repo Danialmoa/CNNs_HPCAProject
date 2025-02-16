@@ -286,7 +286,7 @@ void ConvBlock::forward(const float* d_input, float* d_output,
     dim3 numBlocks(
         (conv_output_width + threadsPerBlock.x - 1) / threadsPerBlock.x,
         (conv_output_height + threadsPerBlock.y - 1) / threadsPerBlock.y,
-        batch_size * out_channels
+        batch_size 
     );
 
     // Print launch configuration
