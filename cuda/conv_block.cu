@@ -539,6 +539,17 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
     if (!streams_initialized) {
         throw std::runtime_error("Streams not initialized");
     }
+
+    size_t input_size;
+    if (in_channels == 3) {  // Conv1
+        input_size = batch_size * in_channels * 32 * 32;
+    } else if (in_channels == 32) {  // Conv2
+        input_size = batch_size * in_channels * 16 * 16;
+    } else if (in_channels == 64) {  // Conv3
+        input_size = batch_size * in_channels * 8 * 8;
+    } else {
+        throw std::runtime_error("Unknown layer configuration");
+    }
     
     CHECK_CUDA_ERROR(cudaDeviceSynchronize());
     cudaStreamSynchronize(stream1);
