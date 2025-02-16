@@ -558,11 +558,6 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
     size_t weight_size = out_channels * in_channels * kernel_size * kernel_size;
     size_t bias_size = out_channels;
     size_t input_size = batch_size * in_channels * input_height * input_width;
-    
-
-    std::cout << "input_size: " << input_size << std::endl;
-    std::cout << "total bytes: " << input_size * sizeof(float) << std::endl;
-
 
     // Allocate temporary gradient buffers
     float *d_grad_weights, *d_grad_biases;
@@ -584,6 +579,8 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
     CHECK_CUDA_ERROR(cudaMalloc(&d_unpooled_grad, conv_output_size * sizeof(float)));
     CHECK_CUDA_ERROR(cudaMemsetAsync(d_unpooled_grad, 0, conv_output_size * sizeof(float), stream1));
     
+    cudaStreamSynchronize(stream1);
+
     // Launch max pooling backward
     dim3 gridDimPool(batch_size, 
                     out_channels, 
@@ -603,6 +600,7 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
     );
     CHECK_LAST_CUDA_ERROR();
     cudaDeviceSynchronize();
+    cudaStreamSynchronize(stream1);
     // Launch convolution backward
     dim3 blockDim(BLOCK_SIZE, BLOCK_SIZE);
     dim3 gridDim(
@@ -633,7 +631,7 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
     );
     CHECK_LAST_CUDA_ERROR();
     cudaDeviceSynchronize();
-
+    cudaStreamSynchronize(stream1);
     
     
     // Update parameters using optimizers in separate streams
@@ -688,5 +686,8 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
     CHECK_CUDA_ERROR(cudaFree(d_grad_weights));
     CHECK_CUDA_ERROR(cudaFree(d_grad_biases));
     CHECK_CUDA_ERROR(cudaFree(d_unpooled_grad));
+    cudaStreamSynchronize(stream1);
+    cudaStreamSynchronize(stream2);
+    cudaStreamSynchronize(stream3);
 
 }
