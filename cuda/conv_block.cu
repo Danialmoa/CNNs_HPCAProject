@@ -22,23 +22,22 @@ __global__ void conv_forward_kernel(
     int out_height,
     int out_width
 ) {
-    const int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    const int total_elements = batch_size * out_channels * out_height * out_width;
+    const int x = blockIdx.x * blockDim.x + threadIdx.x;
+    const int y = blockIdx.y * blockDim.y + threadIdx.y;
+    const int n = blockIdx.z;
     
-    if (idx >= total_elements) return;
+    const int batch = n / out_channels;
+    const int out_ch = n % out_channels;
     
-    const int w_out = idx % out_width;
-    const int h_out = (idx / out_width) % out_height;
-    const int out_ch = (idx / (out_width * out_height)) % out_channels;
-    const int batch = idx / (out_width * out_height * out_channels);
+    if (x >= out_width || y >= out_height || batch >= batch_size) return;
     
     float sum = biases[out_ch];
     
     for (int in_ch = 0; in_ch < in_channels; in_ch++) {
         for (int kh = 0; kh < kernel_size; kh++) {
             for (int kw = 0; kw < kernel_size; kw++) {
-                int h_in = h_out * stride - padding + kh;
-                int w_in = w_out * stride - padding + kw;
+                int h_in = y * stride - padding + kh;
+                int w_in = x * stride - padding + kw;
                 
                 if (h_in >= 0 && h_in < height && w_in >= 0 && w_in < width) {
                     int input_idx = ((batch * in_channels + in_ch) * height + h_in) * width + w_in;
@@ -49,7 +48,7 @@ __global__ void conv_forward_kernel(
         }
     }
     
-    output[idx] = sum;
+    output[((batch * out_channels + out_ch) * out_height + y) * out_width + x] = sum;
 }
 
 // ReLU kernel with 1D indexing
@@ -266,11 +265,20 @@ void ConvBlock::forward(const float* d_input, float* d_output,
         cudaMemcpyDeviceToDevice));
 
     // 1. Convolution
-    const int threads_per_block = 128;
-    const int total_elements = batch_size * out_channels * conv_output_height * conv_output_width;
-    const int num_blocks = (total_elements + threads_per_block - 1) / threads_per_block;
+    // Use 2D block for better spatial locality
+    dim3 threadsPerBlock(16, 16);  // 256 threads total
+    dim3 numBlocks(
+        (conv_output_width + threadsPerBlock.x - 1) / threadsPerBlock.x,
+        (conv_output_height + threadsPerBlock.y - 1) / threadsPerBlock.y,
+        batch_size * out_channels
+    );
+
+    // Print debug info
+    std::cout << "Conv Launch Config:" << std::endl;
+    std::cout << "Block dims: " << threadsPerBlock.x << "x" << threadsPerBlock.y << std::endl;
+    std::cout << "Grid dims: " << numBlocks.x << "x" << numBlocks.y << "x" << numBlocks.z << std::endl;
     
-    conv_forward_kernel<<<num_blocks, threads_per_block>>>(
+    conv_forward_kernel<<<numBlocks, threadsPerBlock>>>(
         d_input, d_weights, d_biases, d_conv_output_cache,
         batch_size, in_channels, out_channels,
         height, width, kernel_size, stride, padding,
@@ -279,16 +287,24 @@ void ConvBlock::forward(const float* d_input, float* d_output,
     CHECK_LAST_CUDA_ERROR();
     
     // 2. ReLU
-    relu_kernel<<<num_blocks, threads_per_block>>>(
-        d_conv_output_cache, total_elements
+    const int total_conv_elements = batch_size * out_channels * conv_output_height * conv_output_width;
+    const int relu_threads = 256;
+    const int relu_blocks = (total_conv_elements + relu_threads - 1) / relu_threads;
+    
+    relu_kernel<<<relu_blocks, relu_threads>>>(
+        d_conv_output_cache, total_conv_elements
     );
     CHECK_LAST_CUDA_ERROR();
     
     // 3. Max Pooling
-    const int pool_elements = batch_size * out_channels * pool_output_height * pool_output_width;
-    const int pool_blocks = (pool_elements + threads_per_block - 1) / threads_per_block;
+    dim3 poolThreads(16, 16);
+    dim3 poolBlocks(
+        (pool_output_width + poolThreads.x - 1) / poolThreads.x,
+        (pool_output_height + poolThreads.y - 1) / poolThreads.y,
+        batch_size * out_channels
+    );
     
-    max_pool_kernel<<<pool_blocks, threads_per_block>>>(
+    max_pool_kernel<<<poolBlocks, poolThreads>>>(
         d_conv_output_cache, d_output, d_pool_indices,
         batch_size, out_channels,
         conv_output_height, conv_output_width,
