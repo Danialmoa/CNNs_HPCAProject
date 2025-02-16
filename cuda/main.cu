@@ -93,9 +93,9 @@ int main() {
             // Create network layers
             std::cout << "Creating network..." << std::endl;
             ConvBlock conv1(3, 32, 3, 1, 1, 2, 2, learning_rate);  // input: 32x32x3, output: 16x16x32
-            ConvBlock conv2(32, 64, 3, 1, 1, 2, 2, learning_rate);  // input: 16x16x32, output: 8x8x32
-            ConvBlock conv3(64, 128, 3, 1, 1, 2, 2, learning_rate);  // input: 8x8x32, output: 4x4x32
-            FullyConnectedLayer fc(128 * 4 * 4, 10, learning_rate);  // input: 8192, output: 10
+            ConvBlock conv2(32, 64, 3, 1, 1, 2, 2, learning_rate);  // input: 16x16x32, output: 8x8x64
+            ConvBlock conv3(64, 128, 3, 1, 1, 2, 2, learning_rate);  // input: 8x8x64, output: 4x4x128
+            FullyConnectedLayer fc(128 * 4 * 4, 10, learning_rate);  // input: 128x4x4, output: 10
 
             // Allocate GPU memory for data and intermediate results
             float *d_batch_images = nullptr;
@@ -109,7 +109,6 @@ int main() {
             float *d_grad_conv_2_output = nullptr;
             float *d_grad_conv_3_output = nullptr;
             float *d_grad_fc_output = nullptr;
-
 
             const int conv1_output_size = batch_size * 32 * 16 * 16;
             const int conv2_output_size = batch_size * 64 * 8 * 8;

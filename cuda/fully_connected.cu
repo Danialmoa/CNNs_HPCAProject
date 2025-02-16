@@ -132,6 +132,9 @@ FullyConnectedLayer::FullyConnectedLayer(int in_features, int num_classes, float
     weights_optimizer.init(num_classes * in_features);
     bias_optimizer.init(num_classes);
     
+    std::cout << "weights shape: " << num_classes << "x" << in_features << std::endl;
+    std::cout << "biases shape: " << num_classes << std::endl;
+    
     // Allocate and copy to GPU
     CHECK_CUDA_ERROR(cudaMalloc(&d_weights, h_weights.size() * sizeof(float)));
     CHECK_CUDA_ERROR(cudaMalloc(&d_biases, h_biases.size() * sizeof(float)));
