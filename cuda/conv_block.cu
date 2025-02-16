@@ -289,11 +289,10 @@ void ConvBlock::forward(const float* d_input, float* d_output,
         batch_size * out_channels
     );
 
-    // Print memory sizes
-    std::cout << "Memory sizes (elements):" << std::endl;
-    std::cout << "Input: " << batch_size * in_channels * height * width << std::endl;
-    std::cout << "Weights: " << out_channels * in_channels * kernel_size * kernel_size << std::endl;
-    std::cout << "Output: " << batch_size * out_channels * conv_output_height * conv_output_width << std::endl;
+    // Print launch configuration
+    std::cout << "Launch config:" << std::endl;
+    std::cout << "Grid: " << numBlocks.x << "x" << numBlocks.y << "x" << numBlocks.z << std::endl;
+    std::cout << "Block: " << threadsPerBlock.x << "x" << threadsPerBlock.y << std::endl;
 
     // 1. Convolution with 3D grid
     conv_forward_kernel<<<numBlocks, threadsPerBlock>>>(
