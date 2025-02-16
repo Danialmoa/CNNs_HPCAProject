@@ -419,6 +419,11 @@ void ConvBlock::allocate_memory(int batch_size) {
     pool_output_height = (conv_output_height - pool_size) / pool_stride + 1;
     pool_output_width = (conv_output_width - pool_size) / pool_stride + 1;
 
+    std::cout << "conv_output_height: " << conv_output_height << std::endl;
+    std::cout << "conv_output_width: " << conv_output_width << std::endl;
+    std::cout << "pool_output_height: " << pool_output_height << std::endl;
+    std::cout << "pool_output_width: " << pool_output_width << std::endl;
+
     // Calculate sizes
     size_t conv_size = batch_size * out_channels * conv_output_height * conv_output_width;
     size_t input_size = batch_size * in_channels * input_height * input_width;
