@@ -224,10 +224,20 @@ ConvBlock::ConvBlock(int in_ch, int out_ch, int k_size,
     d_cache = nullptr;
     d_conv_output_cache = nullptr;
     d_pool_indices = nullptr;
+    d_weights = nullptr;
+    d_biases = nullptr;
     
+    init_weights_and_optimizers();
+}
+
+void ConvBlock::init_weights_and_optimizers() {
+    // Calculate sizes
+    size_t weights_size = out_channels * in_channels * kernel_size * kernel_size;
+    size_t bias_size = out_channels;
+
     // Initialize weights and biases
-    std::vector<float> h_weights(out_channels * in_channels * kernel_size * kernel_size);
-    std::vector<float> h_biases(out_channels, 0.0f);
+    std::vector<float> h_weights(weights_size);
+    std::vector<float> h_biases(bias_size, 0.0f);
     
     // Xavier initialization
     float std_dev = sqrt(2.0f / (in_channels * kernel_size * kernel_size));
@@ -240,15 +250,19 @@ ConvBlock::ConvBlock(int in_ch, int out_ch, int k_size,
     }
     
     // Allocate and copy weights and biases to GPU
-    CHECK_CUDA_ERROR(cudaMalloc(&d_weights, h_weights.size() * sizeof(float)));
-    CHECK_CUDA_ERROR(cudaMalloc(&d_biases, h_biases.size() * sizeof(float)));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_weights, weights_size * sizeof(float)));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_biases, bias_size * sizeof(float)));
     
     CHECK_CUDA_ERROR(cudaMemcpy(d_weights, h_weights.data(), 
-                               h_weights.size() * sizeof(float), 
+                               weights_size * sizeof(float), 
                                cudaMemcpyHostToDevice));
     CHECK_CUDA_ERROR(cudaMemcpy(d_biases, h_biases.data(), 
-                               h_biases.size() * sizeof(float), 
+                               bias_size * sizeof(float), 
                                cudaMemcpyHostToDevice));
+
+    // Initialize Adam optimizers with correct sizes
+    weights_optimizer.init(weights_size);
+    bias_optimizer.init(bias_size);
 }
 
 // Forward pass
