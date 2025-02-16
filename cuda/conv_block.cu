@@ -403,6 +403,14 @@ ConvBlock::~ConvBlock() {
 void ConvBlock::allocate_memory(int batch_size) {
     // Free existing memory if any
     free_memory();
+
+    std::cout << "input_height: " << input_height << std::endl;
+    std::cout << "input_width: " << input_width << std::endl;
+    std::cout << "kernel_size: " << kernel_size << std::endl;
+    std::cout << "stride: " << stride << std::endl;
+    std::cout << "padding: " << padding << std::endl;
+    std::cout << "pool_size: " << pool_size << std::endl;
+    std::cout << "pool_stride: " << pool_stride << std::endl;
     
     // Calculate output dimensions
     conv_output_height = (input_height + 2 * padding - kernel_size) / stride + 1;
