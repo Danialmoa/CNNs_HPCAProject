@@ -24,35 +24,64 @@ __global__ void conv_forward_kernel(
     int out_height,
     int out_width
 ) {
-    __shared__ float shared_input[BLOCK_SIZE][BLOCK_SIZE];
-    __shared__ float shared_weights[KERNEL_SIZE][KERNEL_SIZE];
-
-    const int x = blockIdx.x * blockDim.x + threadIdx.x;
-    const int y = blockIdx.y * blockDim.y + threadIdx.y;
+    // Shared memory for input tile and weights
+    __shared__ float s_input[BLOCK_SIZE + KERNEL_SIZE - 1][BLOCK_SIZE + KERNEL_SIZE - 1];
+    __shared__ float s_weights[KERNEL_SIZE][KERNEL_SIZE];
+    
+    const int tx = threadIdx.x;
+    const int ty = threadIdx.y;
+    const int x = blockIdx.x * blockDim.x + tx;
+    const int y = blockIdx.y * blockDim.y + ty;
     const int out_ch = blockIdx.z;
     
-    if (x >= out_width || y >= out_height || out_ch >= out_channels) return;
+    if (out_ch >= out_channels) return;
     
     // Process all batches in this thread
     for (int batch = 0; batch < batch_size; batch++) {
         float sum = biases[out_ch];
         
         for (int in_ch = 0; in_ch < in_channels; in_ch++) {
-            for (int kh = 0; kh < kernel_size; kh++) {
-                for (int kw = 0; kw < kernel_size; kw++) {
-                    int h_in = y * stride - padding + kh;
-                    int w_in = x * stride - padding + kw;
+            // Load weights into shared memory
+            if (tx < kernel_size && ty < kernel_size) {
+                int weight_idx = ((out_ch * in_channels + in_ch) * kernel_size + ty) * kernel_size + tx;
+                s_weights[ty][tx] = weights[weight_idx];
+            }
+            __syncthreads();
+            
+            // Load input tile into shared memory
+            for (int i = ty; i < BLOCK_SIZE + kernel_size - 1; i += blockDim.y) {
+                for (int j = tx; j < BLOCK_SIZE + kernel_size - 1; j += blockDim.x) {
+                    int h_in = blockIdx.y * blockDim.y + i - padding;
+                    int w_in = blockIdx.x * blockDim.x + j - padding;
                     
                     if (h_in >= 0 && h_in < height && w_in >= 0 && w_in < width) {
                         int input_idx = ((batch * in_channels + in_ch) * height + h_in) * width + w_in;
-                        int weight_idx = ((out_ch * in_channels + in_ch) * kernel_size + kh) * kernel_size + kw;
-                        sum += input[input_idx] * weights[weight_idx];
+                        s_input[i][j] = input[input_idx];
+                    } else {
+                        s_input[i][j] = 0.0f;
                     }
                 }
             }
+            __syncthreads();
+            
+            // Compute convolution using shared memory
+            if (x < out_width && y < out_height) {
+                for (int kh = 0; kh < kernel_size; kh++) {
+                    for (int kw = 0; kw < kernel_size; kw++) {
+                        int h_offset = ty * stride + kh;
+                        int w_offset = tx * stride + kw;
+                        sum += s_input[h_offset][w_offset] * s_weights[kh][kw];
+                    }
+                }
+            }
+            __syncthreads();
         }
         
-        output[((batch * out_channels + out_ch) * out_height + y) * out_width + x] = sum;
+        // Write output
+        if (x < out_width && y < out_height) {
+            int out_idx = ((batch * out_channels + out_ch) * out_height + y) * out_width + x;
+            output[out_idx] = sum;
+        }
     }
 }
 
