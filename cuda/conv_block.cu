@@ -74,27 +74,29 @@ __global__ void max_pool_kernel(
     int out_height,
     int out_width
 ) {
-    const int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    const int total_elements = batch_size * channels * out_height * out_width;
+    const int x = blockIdx.x * blockDim.x + threadIdx.x;
+    const int y = blockIdx.y * blockDim.y + threadIdx.y;
+    const int ch = blockIdx.z % channels;
+    const int batch = blockIdx.z / channels;
     
-    if (idx >= total_elements) return;
-    
-    const int w_out = idx % out_width;
-    const int h_out = (idx / out_width) % out_height;
-    const int ch = (idx / (out_width * out_height)) % channels;
-    const int batch = idx / (out_width * out_height * channels);
+    if (x >= out_width || y >= out_height || ch >= channels || batch >= batch_size) return;
     
     float max_val = -INFINITY;
     int max_idx = -1;
     
+    // Compute the input window position
+    const int h_start = y * stride;
+    const int w_start = x * stride;
+    
+    // Find maximum in the pool window
     for (int ph = 0; ph < pool_size; ph++) {
         for (int pw = 0; pw < pool_size; pw++) {
-            int h_in = h_out * stride + ph;
-            int w_in = w_out * stride + pw;
+            const int h_in = h_start + ph;
+            const int w_in = w_start + pw;
             
             if (h_in < height && w_in < width) {
-                int in_idx = ((batch * channels + ch) * height + h_in) * width + w_in;
-                float val = input[in_idx];
+                const int in_idx = ((batch * channels + ch) * height + h_in) * width + w_in;
+                const float val = input[in_idx];
                 if (val > max_val) {
                     max_val = val;
                     max_idx = in_idx;
@@ -103,8 +105,10 @@ __global__ void max_pool_kernel(
         }
     }
     
-    output[idx] = max_val;
-    indices[idx] = max_idx;
+    // Write output
+    const int out_idx = ((batch * channels + ch) * out_height + y) * out_width + x;
+    output[out_idx] = max_val;
+    indices[out_idx] = max_idx;
 }
 
 // Max pooling backward kernel
@@ -306,11 +310,17 @@ void ConvBlock::forward(const float* d_input, float* d_output,
     );
     
     max_pool_kernel<<<poolBlocks, poolThreads>>>(
-        d_conv_output_cache, d_output, d_pool_indices,
-        batch_size, out_channels,
-        conv_output_height, conv_output_width,
-        pool_size, pool_stride,
-        pool_output_height, pool_output_width
+        d_conv_output_cache,
+        d_output,
+        d_pool_indices,
+        batch_size,
+        out_channels,
+        conv_output_height,
+        conv_output_width,
+        pool_size,
+        pool_stride,
+        pool_output_height,
+        pool_output_width
     );
     CHECK_LAST_CUDA_ERROR();
 }
