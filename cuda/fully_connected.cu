@@ -213,6 +213,9 @@ void FullyConnectedLayer::backward(const uint8_t* d_labels, float* d_grad_input,
     if (!streams_initialized) {
         init_streams();
     }
+    cudaStreamSynchronize(stream1);
+    cudaStreamSynchronize(stream2);
+    cudaStreamSynchronize(stream3);
     
     // Allocate memory for gradients
     float *d_grad_weights, *d_grad_biases;
@@ -227,8 +230,11 @@ void FullyConnectedLayer::backward(const uint8_t* d_labels, float* d_grad_input,
                                num_classes * sizeof(float), stream2));
     CHECK_CUDA_ERROR(cudaMemsetAsync(d_grad_input, 0, 
                                batch_size * in_features * sizeof(float), stream3));
+
+    cudaStreamSynchronize(stream1);
     cudaStreamSynchronize(stream2);
     cudaStreamSynchronize(stream3);
+
     // Compute gradients
     dim3 grid(batch_size, num_classes);
     backward_kernel<<<grid, 1, 0, stream1>>>(
