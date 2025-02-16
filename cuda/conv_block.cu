@@ -26,24 +26,23 @@ __global__ void conv_forward_kernel(
     int out_height,
     int out_width
 ) {
-    // Calculate position
-    int batch = blockIdx.x;
-    int out_ch = blockIdx.y;
-    int h = blockIdx.z / out_width;
-    int w = blockIdx.z % out_width;
+    const int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    const int total_elements = batch_size * out_channels * out_height * out_width;
     
-    // Bounds checking
-    if (batch >= batch_size || out_ch >= out_channels || 
-        h >= out_height || w >= out_width) return;
+    if (idx >= total_elements) return;
     
-    // Compute convolution for this output position
+    const int w_out = idx % out_width;
+    const int h_out = (idx / out_width) % out_height;
+    const int out_ch = (idx / (out_width * out_height)) % out_channels;
+    const int batch = idx / (out_width * out_height * out_channels);
+    
     float sum = biases[out_ch];
     
     for (int in_ch = 0; in_ch < in_channels; in_ch++) {
         for (int kh = 0; kh < kernel_size; kh++) {
             for (int kw = 0; kw < kernel_size; kw++) {
-                int h_in = h * stride - padding + kh;
-                int w_in = w * stride - padding + kw;
+                int h_in = h_out * stride - padding + kh;
+                int w_in = w_out * stride - padding + kw;
                 
                 if (h_in >= 0 && h_in < height && w_in >= 0 && w_in < width) {
                     int input_idx = ((batch * in_channels + in_ch) * height + h_in) * width + w_in;
@@ -54,9 +53,7 @@ __global__ void conv_forward_kernel(
         }
     }
     
-    // Write output
-    int output_idx = ((batch * out_channels + out_ch) * out_height + h) * out_width + w;
-    output[output_idx] = sum;
+    output[idx] = sum;
 }
 
 // ReLU kernel
@@ -254,36 +251,29 @@ ConvBlock::ConvBlock(int in_ch, int out_ch, int k_size,
 // Forward pass
 void ConvBlock::forward(const float* d_input, float* d_output, 
                        int batch_size, int height, int width) {
-
-    // Save input dimensions
+    // Set dimensions
     input_height = height;
     input_width = width;
-    
-    // Calculate output dimensions
     conv_output_height = (height + 2 * padding - kernel_size) / stride + 1;
     conv_output_width = (width + 2 * padding - kernel_size) / stride + 1;
     pool_output_height = (conv_output_height - pool_size) / pool_stride + 1;
     pool_output_width = (conv_output_width - pool_size) / pool_stride + 1;
-
+    
     if (batch_size != current_batch_size) {
         allocate_memory(batch_size);
     }
 
-    // Copy input to cache
-    size_t input_size = (size_t)batch_size * in_channels * height * width;
-    CHECK_CUDA_ERROR(cudaMemcpy(d_cache, d_input, input_size * sizeof(float), 
-                               cudaMemcpyDeviceToDevice));
+    // Cache input for backward pass
+    CHECK_CUDA_ERROR(cudaMemcpy(d_cache, d_input, 
+        batch_size * in_channels * height * width * sizeof(float), 
+        cudaMemcpyDeviceToDevice));
+
     // 1. Convolution
-    std::cout << "batch_size: " << batch_size << std::endl;
-    std::cout << "out_channels: " << out_channels << std::endl;
-    std::cout << "conv_output_height: " << conv_output_height << std::endl;
-    std::cout << "conv_output_width: " << conv_output_width << std::endl;
-    const int max_grid_dim = 65535; 
-    dim3 conv_grid;
-    conv_grid.x = batch_size;
-    conv_grid.y = out_channels;
-    conv_grid.z = min(conv_output_height * conv_output_width, max_grid_dim);
-    conv_forward_kernel<<<conv_grid, 1>>>(
+    const int threads_per_block = 256;
+    const int total_elements = batch_size * out_channels * conv_output_height * conv_output_width;
+    const int num_blocks = (total_elements + threads_per_block - 1) / threads_per_block;
+    
+    conv_forward_kernel<<<num_blocks, threads_per_block>>>(
         d_input, d_weights, d_biases, d_conv_output_cache,
         batch_size, in_channels, out_channels,
         height, width, kernel_size, stride, padding,
