@@ -453,10 +453,12 @@ void ConvBlock::forward(const float* d_input, float* d_output, int batch_size, i
     input_height = height;
     input_width = width;
     current_batch_size = batch_size;
-    std::cout << "Forward pass dimensions:" << std::endl;
+    std::cout << "\nForward pass dimensions for ConvBlock:" << std::endl;
     std::cout << "Setting input_height: " << height << std::endl;
     std::cout << "Setting input_width: " << width << std::endl;
     std::cout << "Setting batch_size: " << batch_size << std::endl;
+    std::cout << "in_channels: " << in_channels << std::endl;
+    std::cout << "out_channels: " << out_channels << std::endl;
 
     // Allocate memory for this forward pass
     allocate_memory(batch_size);
@@ -537,6 +539,12 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
     if (!streams_initialized) {
         throw std::runtime_error("Streams not initialized");
     }
+    std::cout << "\nBackward pass dimensions for ConvBlock:" << std::endl;
+    std::cout << "batch_size: " << batch_size << std::endl;
+    std::cout << "in_channels: " << in_channels << std::endl;
+    std::cout << "input_height: " << input_height << std::endl;
+    std::cout << "input_width: " << input_width << std::endl;
+    
     cudaError_t stream_status;
     stream_status = cudaStreamQuery(stream1);
     if (stream_status != cudaSuccess && stream_status != cudaErrorNotReady) {
