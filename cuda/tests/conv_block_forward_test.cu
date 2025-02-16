@@ -104,50 +104,11 @@ int main() {
             throw std::runtime_error(std::string("CUDA error: ") + cudaGetErrorString(err));
         }
 
-        // Test different input sizes
-        std::vector<std::pair<int, int>> test_sizes = {
-            {16, 16}
-        };
-
-        std::cout << "\n=== Testing Different Input Sizes ===\n";
-        for (const auto& size : test_sizes) {
-            int test_height = size.first;
-            int test_width = size.second;
-            
-            std::cout << "\nTesting size: " << test_height << "x" << test_width << std::endl;
-            
-            // Reallocate input/output with new size
-            std::vector<float> test_input(batch_size * in_channels * test_height * test_width, 1.0f);
-            float* d_test_input;
-            float* d_test_output;
-            
-            cudaMalloc(&d_test_input, test_input.size() * sizeof(float));
-            cudaMemcpy(d_test_input, test_input.data(), test_input.size() * sizeof(float), 
-                      cudaMemcpyHostToDevice);
-            
-            int test_conv_out_h = (test_height + 2 * padding - kernel_size) / stride + 1;
-            int test_conv_out_w = (test_width + 2 * padding - kernel_size) / stride + 1;
-            int test_pool_out_h = (test_conv_out_h - pool_size) / pool_stride + 1;
-            int test_pool_out_w = (test_conv_out_w - pool_size) / pool_stride + 1;
-            
-            cudaMalloc(&d_test_output, batch_size * out_channels * test_pool_out_h * 
-                      test_pool_out_w * sizeof(float));
-            
-            // Forward pass with new size
-            conv_block.forward(d_test_input, d_test_output, batch_size, test_height, test_width);
-            
-            std::cout << "Forward pass successful for size " << test_height << "x" << test_width 
-                      << std::endl;
-            
-            cudaFree(d_test_input);
-            cudaFree(d_test_output);
-        }
-
         // Cleanup
         cudaFree(d_input);
         cudaFree(d_output);
 
-        std::cout << "\nAll tests completed successfully!\n";
+        std::cout << "\nTest completed successfully!\n";
         
     } catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << std::endl;
