@@ -6,46 +6,38 @@
 
 class ConvBlock {
 private:
-    int in_channels, out_channels, kernel_size, stride, padding;
+    // Layer parameters
+    int in_channels, out_channels;
+    int kernel_size, stride, padding;
     int pool_size, pool_stride;
     int current_batch_size;
-    
-    // Device pointers
-    float* d_weights;
-    float* d_biases;
-    float* d_cache;                 // Input cache for backward pass
-    float* d_conv_output_cache;     // Convolution output cache
-    float* d_relu_cache;             // ReLU output cache
-    float* d_pool_indices;          // Pooling indices cache
-    
     float learning_rate;
     
     // Dimensions
     int input_height, input_width;
     int conv_output_height, conv_output_width;
     int pool_output_height, pool_output_width;
-
+    
+    // Device pointers
+    float* d_weights;
+    float* d_biases;
+    float* d_cache;                 // Input cache for backward pass
+    float* d_conv_output_cache;     // Convolution output cache
+    float* d_relu_output_cache;     // ReLU output cache
+    int* d_pool_indices;           // Pooling indices cache (changed to int*)
+    
+    // CUDA streams
     cudaStream_t stream1, stream2, stream3;
     bool streams_initialized;
-
-    //Adam Optimizer
+    
+    // Optimizers
     AdamOptimizer weights_optimizer;
     AdamOptimizer bias_optimizer;
-
+    
     // Helper functions
     void allocate_memory(int batch_size);
     void free_memory();
-    void clear_cache() {
-        cudaDeviceSynchronize();
-    }
-    void init_streams() {
-        if (!streams_initialized) {
-            CHECK_CUDA_ERROR(cudaStreamCreate(&stream1));
-            CHECK_CUDA_ERROR(cudaStreamCreate(&stream2));
-            CHECK_CUDA_ERROR(cudaStreamCreate(&stream3));
-            streams_initialized = true;
-        }
-    }
+    void init_streams();
 
 public:
     ConvBlock(int in_channels, int out_channels, int kernel_size, 

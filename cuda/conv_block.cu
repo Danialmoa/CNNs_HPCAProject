@@ -150,22 +150,19 @@ __global__ void max_pool_forward_kernel(
 __global__ void conv_backward_kernel(
     const float* grad_output,     // Gradient from next layer
     const float* weights,         // Layer weights
+    const float* input,           // Layer input (cached)
     float* grad_input,            // Gradient w.r.t input
-    float* grad_weights,          // Gradient w.r.t weights  
+    float* grad_weights,          // Gradient w.r.t weights
     float* grad_biases,           // Gradient w.r.t biases
-    const float* input,           // Layer input
-    const float* relu_output,     // ReLU activation output
     int batch_size,
     int in_channels,
-    int out_channels, 
+    int out_channels,
     int height,
     int width,
     int kernel_size,
     int stride,
-    int padding,
-    int output_height,
-    int output_width) {
-    
+    int padding
+) {
     __shared__ float s_grad[TILE_SIZE][TILE_SIZE];
     __shared__ float s_input[TILE_SIZE + BLOCK_SIZE - 1][TILE_SIZE + BLOCK_SIZE - 1];
     __shared__ float s_weights[BLOCK_SIZE][BLOCK_SIZE];
@@ -192,10 +189,10 @@ __global__ void conv_backward_kernel(
     }
     
     // Load gradient and apply ReLU derivative
-    if (h < output_height && w < output_width && b < batch_size) {
-        int output_idx = ((b * out_channels + oc) * output_height + h) * output_width + w;
+    if (h < height && w < width && b < batch_size) {
+        int output_idx = ((b * out_channels + oc) * height + h) * width + w;
         const float alpha = 0.01f;  // Leaky ReLU slope
-        float val = relu_output[output_idx];
+        float val = input[output_idx];
         float relu_deriv = (val > 0.0f) ? 1.0f : alpha;
         s_grad[ty][tx] = grad_output[output_idx] * relu_deriv;
     } else {
@@ -228,7 +225,7 @@ __global__ void conv_backward_kernel(
         __syncthreads();
         
         // Compute gradients
-        if (h < output_height && w < output_width && b < batch_size) {
+        if (h < height && w < width && b < batch_size) {
             // Compute input gradients
             for (int kh = 0; kh < kernel_size; kh++) {
                 for (int kw = 0; kw < kernel_size; kw++) {
@@ -270,7 +267,7 @@ __global__ void conv_backward_kernel(
         float bias_grad = 0.0f;
         for (int i = 0; i < TILE_SIZE; i++) {
             for (int j = 0; j < TILE_SIZE; j++) {
-                if (tile_h + i < output_height && tile_w + j < output_width) {
+                if (tile_h + i < height && tile_w + j < width) {
                     bias_grad += s_grad[i][j];
                 }
             }
@@ -299,27 +296,27 @@ __global__ void clip_values_kernel(float* values, size_t size, float min_val, fl
 }
 
 __global__ void max_pool_backward_kernel(
-    const float* grad_output,     // Gradient from next layer
-    float* grad_input,            // Gradient to previous layer
-    const int* pool_indices,      // Saved max indices from forward pass
+    const float* grad_output,
+    float* grad_input,
+    const int* pool_indices,
     int batch_size,
     int channels,
-    int input_height,            // Conv output height
-    int input_width,             // Conv output width
-    int output_height,           // Pooled output height
-    int output_width             // Pooled output width
+    int input_height,
+    int input_width,
+    int pool_size,
+    int pool_stride
 ) {
     // Calculate position
     int b = blockIdx.x;                                    // Batch index
     int c = blockIdx.y;                                    // Channel
     int idx = blockIdx.z * blockDim.x + threadIdx.x;
-    int h = idx / output_width;                           // Output height position
-    int w = idx % output_width;                           // Output width position
+    int h = idx / input_width;                           // Output height position
+    int w = idx % input_width;                           // Output width position
     
-    if (b >= batch_size || c >= channels || h >= output_height || w >= output_width) 
+    if (b >= batch_size || c >= channels || h >= input_height || w >= input_width) 
         return;
         
-    int output_idx = ((b * channels + c) * output_height + h) * output_width + w;
+    int output_idx = ((b * channels + c) * input_height + h) * input_width + w;
     int input_idx = pool_indices[output_idx];
     
     // Propagate gradient to max element's position
@@ -345,12 +342,12 @@ ConvBlock::ConvBlock(int in_channels, int out_channels, int kernel_size,
                      float learning_rate)
     : in_channels(in_channels), out_channels(out_channels), kernel_size(kernel_size),
       stride(stride), padding(padding), pool_size(pool_size), 
-      pool_stride(pool_stride), learning_rate(learning_rate), weights_optimizer(learning_rate),
-      bias_optimizer(learning_rate),
+      pool_stride(pool_stride), learning_rate(learning_rate),
+      weights_optimizer(learning_rate), bias_optimizer(learning_rate),
       d_weights(nullptr), d_biases(nullptr), d_cache(nullptr),
       d_conv_output_cache(nullptr), d_relu_output_cache(nullptr),
       d_pool_indices(nullptr), current_batch_size(0),
-      streams_initialized(false), d_relu_cache(nullptr) {
+      streams_initialized(false) {
     
     init_streams();
 
@@ -402,16 +399,8 @@ ConvBlock::~ConvBlock() {
 
 // Allocates GPU memory for intermediate results
 void ConvBlock::allocate_memory(int batch_size) {
-    // Free any existing allocations
-    if (d_conv_output_cache) cudaFree(d_conv_output_cache);
-    if (d_relu_output_cache) cudaFree(d_relu_output_cache);
-    if (d_pool_indices) cudaFree(d_pool_indices);
-    if (d_cache) cudaFree(d_cache);
-
-    d_cache = nullptr;
-    d_conv_output_cache = nullptr;
-    d_relu_output_cache = nullptr;
-    d_pool_indices = nullptr;
+    // Free existing allocations
+    free_memory();
 
     // Calculate output dimensions
     conv_output_height = (input_height + 2 * padding - kernel_size) / stride + 1;
@@ -424,7 +413,7 @@ void ConvBlock::allocate_memory(int batch_size) {
 
     // Allocate memory for intermediate results
     CHECK_CUDA_ERROR(cudaMalloc(&d_conv_output_cache, conv_size * sizeof(float)));
-    CHECK_CUDA_ERROR(cudaMalloc(&d_relu_cache, conv_size * sizeof(float)));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_relu_output_cache, conv_size * sizeof(float)));
     CHECK_CUDA_ERROR(cudaMalloc(&d_pool_indices, conv_size * sizeof(int)));
     CHECK_CUDA_ERROR(cudaMalloc(&d_cache, input_size * sizeof(float)));
 
@@ -433,34 +422,19 @@ void ConvBlock::allocate_memory(int batch_size) {
 
 // Frees all GPU memory
 void ConvBlock::free_memory() {
-    if (d_weights) {
-        cudaFree(d_weights);
-        d_weights = nullptr;
-    }
-    if (d_biases) {
-        cudaFree(d_biases);
-        d_biases = nullptr;
-    }
-    if (d_cache) {
-        cudaFree(d_cache);
-        d_cache = nullptr;
-    }
-    if (d_conv_output_cache) {
-        cudaFree(d_conv_output_cache);
-        d_conv_output_cache = nullptr;
-    }
-    if (d_relu_output_cache) {
-        cudaFree(d_relu_output_cache);
-        d_relu_output_cache = nullptr;
-    }
-    if (d_pool_indices) {
-        cudaFree(d_pool_indices);
-        d_pool_indices = nullptr;
-    }
-    if (d_relu_cache) {
-        cudaFree(d_relu_cache);
-        d_relu_cache = nullptr;
-    }
+    if (d_weights) cudaFree(d_weights);
+    if (d_biases) cudaFree(d_biases);
+    if (d_cache) cudaFree(d_cache);
+    if (d_conv_output_cache) cudaFree(d_conv_output_cache);
+    if (d_relu_output_cache) cudaFree(d_relu_output_cache);
+    if (d_pool_indices) cudaFree(d_pool_indices);
+    
+    d_weights = nullptr;
+    d_biases = nullptr;
+    d_cache = nullptr;
+    d_conv_output_cache = nullptr;
+    d_relu_output_cache = nullptr;
+    d_pool_indices = nullptr;
 }
 
 // Forward pass: convolution -> ReLU -> max pooling
@@ -615,10 +589,10 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
     dim3 blockDimReLU(MAX_THREADS);
     
     relu_backward_kernel<<<gridDimReLU, blockDimReLU, 0, stream2>>>(
-        d_unpooled_grad,        // grad_output
-        d_relu_grad,            // grad_input
-        d_relu_output_cache,    // relu_cache (from forward pass)
-        conv_output_size        // total size
+        d_unpooled_grad,      // grad_output
+        d_relu_grad,          // grad_input
+        d_relu_output_cache,  // relu_cache (from forward pass)
+        conv_output_size      // total size
     );
     CHECK_LAST_CUDA_ERROR();
     cudaStreamSynchronize(stream2);
@@ -635,10 +609,10 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
     conv_backward_kernel<<<gridDim, blockDim, 0, stream1>>>(
         d_relu_grad,        // grad_output
         d_weights,          // weights
-        d_cache,            // input_cache
-        d_grad_input,       // grad_input
-        d_grad_weights,     // grad_weights
-        d_grad_biases,      // grad_biases
+        d_cache,           // input_cache
+        d_grad_input,      // grad_input
+        d_grad_weights,    // grad_weights
+        d_grad_biases,     // grad_biases
         batch_size,
         in_channels,
         out_channels,
