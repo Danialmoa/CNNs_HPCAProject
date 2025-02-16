@@ -549,8 +549,10 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
     // Calculate sizes
     size_t weight_size = out_channels * in_channels * kernel_size * kernel_size;
     size_t bias_size = out_channels;
-    size_t input_size = batch_size * in_channels * input_height * input_width;
-    size_t conv_output_size = batch_size * out_channels * conv_output_height * conv_output_width;
+
+    size_t input_grad_size = batch_size * in_channels * input_height * input_width;
+    size_t output_grad_size = batch_size * out_channels * conv_output_height * conv_output_width;
+
 
     std::cout << "\nBackward pass dimensions for ConvBlock:" << std::endl;
     std::cout << "Batch size: " << batch_size << std::endl;
@@ -570,15 +572,16 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
     CHECK_CUDA_ERROR(cudaMalloc(&d_grad_weights, weight_size * sizeof(float)));
     CHECK_CUDA_ERROR(cudaMalloc(&d_grad_biases, bias_size * sizeof(float)));
 
+    // Zero out gradients
+    CHECK_CUDA_ERROR(cudaMemsetAsync(d_grad_weights, 0, weight_size * sizeof(float), stream1));
+    CHECK_CUDA_ERROR(cudaMemsetAsync(d_grad_biases, 0, bias_size * sizeof(float), stream2));
+
     if (d_grad_input == nullptr) {
         throw std::runtime_error("d_grad_input is null");
     }
     CHECK_CUDA_ERROR(cudaMemsetAsync(d_grad_input, 0, input_grad_size * sizeof(float), stream3));
     
-    // Zero out gradients
-    CHECK_CUDA_ERROR(cudaMemsetAsync(d_grad_weights, 0, weight_size * sizeof(float), stream1));
-    CHECK_CUDA_ERROR(cudaMemsetAsync(d_grad_biases, 0, bias_size * sizeof(float), stream2));
-    CHECK_CUDA_ERROR(cudaMemsetAsync(d_grad_input, 0, input_size * sizeof(float), stream3));
+    
 
     cudaStreamSynchronize(stream1);
     cudaStreamSynchronize(stream2);
