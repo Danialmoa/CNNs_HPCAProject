@@ -266,15 +266,10 @@ void ConvBlock::forward(const float* d_input, float* d_output,
         cudaMemcpyDeviceToDevice));
 
     // 1. Convolution
-    const int threads_per_block = 256;
+    const int threads_per_block = 128;
     const int total_elements = batch_size * out_channels * conv_output_height * conv_output_width;
     const int num_blocks = (total_elements + threads_per_block - 1) / threads_per_block;
-    cudaDeviceProp prop;
-    cudaGetDeviceProperties(&prop, 0);
-    std::cout << "num_blocks: " << num_blocks << std::endl;
-    std::cout << "threads_per_block: " << threads_per_block << std::endl;
-    std::cout << "total_elements: " << total_elements << std::endl;
-    std::cout << "max_threads_per_block: " << prop.maxThreadsPerBlock << std::endl;
+    
     conv_forward_kernel<<<num_blocks, threads_per_block>>>(
         d_input, d_weights, d_biases, d_conv_output_cache,
         batch_size, in_channels, out_channels,
