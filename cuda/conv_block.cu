@@ -327,6 +327,18 @@ __global__ void max_pool_backward_kernel(
     atomicAdd(&grad_input[input_idx], grad);
 }
 
+__global__ void relu_backward_kernel(
+    const float* grad_output,
+    float* grad_input,
+    const float* relu_cache,
+    int size
+) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= size) return;
+    
+    grad_input[idx] = grad_output[idx] * (relu_cache[idx] > 0 ? 1.0f : 0.0f);
+}
+
 // Constructor initializes layer parameters and allocates GPU memory
 ConvBlock::ConvBlock(int in_channels, int out_channels, int kernel_size, 
                      int stride, int padding, int pool_size, int pool_stride, 
@@ -338,7 +350,7 @@ ConvBlock::ConvBlock(int in_channels, int out_channels, int kernel_size,
       d_weights(nullptr), d_biases(nullptr), d_cache(nullptr),
       d_conv_output_cache(nullptr), d_relu_output_cache(nullptr),
       d_pool_indices(nullptr), current_batch_size(0),
-      streams_initialized(false) {
+      streams_initialized(false), d_relu_cache(nullptr) {
     
     init_streams();
 
@@ -412,7 +424,7 @@ void ConvBlock::allocate_memory(int batch_size) {
 
     // Allocate memory for intermediate results
     CHECK_CUDA_ERROR(cudaMalloc(&d_conv_output_cache, conv_size * sizeof(float)));
-    CHECK_CUDA_ERROR(cudaMalloc(&d_relu_output_cache, conv_size * sizeof(float)));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_relu_cache, conv_size * sizeof(float)));
     CHECK_CUDA_ERROR(cudaMalloc(&d_pool_indices, conv_size * sizeof(int)));
     CHECK_CUDA_ERROR(cudaMalloc(&d_cache, input_size * sizeof(float)));
 
@@ -444,6 +456,10 @@ void ConvBlock::free_memory() {
     if (d_pool_indices) {
         cudaFree(d_pool_indices);
         d_pool_indices = nullptr;
+    }
+    if (d_relu_cache) {
+        cudaFree(d_relu_cache);
+        d_relu_cache = nullptr;
     }
 }
 
@@ -595,15 +611,14 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
     cudaStreamSynchronize(stream1);
 
     // 2. ReLU backward
-    dim3 gridDimReLU(batch_size, 
-                     out_channels,
-                     (conv_output_height * conv_output_width + MAX_THREADS - 1) / MAX_THREADS);
+    dim3 gridDimReLU((conv_output_size + MAX_THREADS - 1) / MAX_THREADS);
+    dim3 blockDimReLU(MAX_THREADS);
     
-    relu_backward_kernel<<<gridDimReLU, blockDimPool, 0, stream2>>>(
-        d_unpooled_grad,
-        d_relu_grad,
-        d_relu_cache,  // Saved from forward pass
-        batch_size * out_channels * conv_output_height * conv_output_width * 4
+    relu_backward_kernel<<<gridDimReLU, blockDimReLU, 0, stream2>>>(
+        d_unpooled_grad,      // grad_output
+        d_relu_grad,          // grad_input
+        d_relu_output_cache,  // relu_cache (from forward pass)
+        conv_output_size      // total size
     );
     CHECK_LAST_CUDA_ERROR();
     cudaStreamSynchronize(stream2);
@@ -618,11 +633,12 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
     );
 
     conv_backward_kernel<<<gridDim, blockDim, 0, stream1>>>(
-        d_relu_grad,
-        d_weights,
-        d_grad_input,
-        d_grad_weights,
-        d_grad_biases,
+        d_relu_grad,        // grad_output
+        d_weights,          // weights
+        d_cache,           // input_cache
+        d_grad_input,      // grad_input
+        d_grad_weights,    // grad_weights
+        d_grad_biases,     // grad_biases
         batch_size,
         in_channels,
         out_channels,
