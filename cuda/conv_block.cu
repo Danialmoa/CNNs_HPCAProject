@@ -541,6 +541,11 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
     if (!streams_initialized) {
         init_streams();
     }
+
+    cudaStreamSynchronize(stream1);
+    cudaStreamSynchronize(stream2);
+    cudaStreamSynchronize(stream3);
+    
     // Calculate sizes
     size_t weight_size = out_channels * in_channels * kernel_size * kernel_size;
     size_t bias_size = out_channels;
