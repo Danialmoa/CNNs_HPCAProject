@@ -171,6 +171,7 @@ int main() {
                         cudaMemGetInfo(&free_memory, &total_memory);
                         std::cout << "Available GPU memory: " << free_memory / 1024 / 1024 << "MB" << std::endl;
                     }
+                    CHECK_CUDA_ERROR(cudaDeviceSynchronize());
 
                 }
 
