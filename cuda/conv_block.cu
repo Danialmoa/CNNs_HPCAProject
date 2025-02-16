@@ -6,6 +6,8 @@
 
 #define BLOCK_SIZE 16
 #define KERNEL_SIZE 3
+#define SHARED_MEM_SIZE ((BLOCK_SIZE + KERNEL_SIZE - 1) * (BLOCK_SIZE + KERNEL_SIZE - 1))
+
 
 // convolution forward kernel
 __global__ void conv_forward_kernel(
@@ -25,8 +27,9 @@ __global__ void conv_forward_kernel(
     int out_width
 ) {
     // Shared memory for input tile and weights
-    __shared__ float s_input[BLOCK_SIZE + KERNEL_SIZE - 1][BLOCK_SIZE + KERNEL_SIZE - 1];
-    __shared__ float s_weights[KERNEL_SIZE][KERNEL_SIZE];
+    extern __shared__ float shared_mem[];
+    float* s_input = shared_mem;
+    float* s_weights = &shared_mem[SHARED_MEM_SIZE];
     
     const int tx = threadIdx.x;
     const int ty = threadIdx.y;
@@ -44,21 +47,22 @@ __global__ void conv_forward_kernel(
             // Load weights into shared memory
             if (tx < kernel_size && ty < kernel_size) {
                 int weight_idx = ((out_ch * in_channels + in_ch) * kernel_size + ty) * kernel_size + tx;
-                s_weights[ty][tx] = weights[weight_idx];
+                s_weights[ty * kernel_size + tx] = weights[weight_idx];
             }
             __syncthreads();
             
             // Load input tile into shared memory
-            for (int i = ty; i < BLOCK_SIZE + kernel_size - 1; i += blockDim.y) {
-                for (int j = tx; j < BLOCK_SIZE + kernel_size - 1; j += blockDim.x) {
-                    int h_in = blockIdx.y * blockDim.y + i - padding;
-                    int w_in = blockIdx.x * blockDim.x + j - padding;
+            int tile_size = BLOCK_SIZE + kernel_size - 1;
+            for (int i = ty; i < tile_size; i += blockDim.y) {
+                for (int j = tx; j < tile_size; j += blockDim.x) {
+                    int h_in = blockIdx.y * BLOCK_SIZE + i - padding;
+                    int w_in = blockIdx.x * BLOCK_SIZE + j - padding;
                     
                     if (h_in >= 0 && h_in < height && w_in >= 0 && w_in < width) {
                         int input_idx = ((batch * in_channels + in_ch) * height + h_in) * width + w_in;
-                        s_input[i][j] = input[input_idx];
+                        s_input[i * tile_size + j] = input[input_idx];
                     } else {
-                        s_input[i][j] = 0.0f;
+                        s_input[i * tile_size + j] = 0.0f;
                     }
                 }
             }
@@ -70,7 +74,8 @@ __global__ void conv_forward_kernel(
                     for (int kw = 0; kw < kernel_size; kw++) {
                         int h_offset = ty * stride + kh;
                         int w_offset = tx * stride + kw;
-                        sum += s_input[h_offset][w_offset] * s_weights[kh][kw];
+                        sum += s_input[h_offset * tile_size + w_offset] * 
+                               s_weights[kh * kernel_size + kw];
                     }
                 }
             }
@@ -319,27 +324,14 @@ void ConvBlock::forward(const float* d_input, float* d_output,
         out_channels
     );
 
-    // Add validation before kernel launch
-    if (numBlocks.x == 0 || numBlocks.y == 0 || numBlocks.z == 0) {
-        throw std::runtime_error("Invalid block configuration");
-    }
+    // Calculate shared memory size
+    size_t shared_mem_size = 
+        ((BLOCK_SIZE + KERNEL_SIZE - 1) * (BLOCK_SIZE + KERNEL_SIZE - 1) + // Input tile
+         KERNEL_SIZE * KERNEL_SIZE) *                                       // Weights
+        sizeof(float);
 
-    // Add more detailed debug information
-    std::cout << "Detailed grid configuration:" << std::endl;
-    std::cout << "conv_output_width: " << conv_output_width << std::endl;
-    std::cout << "conv_output_height: " << conv_output_height << std::endl;
-    std::cout << "Blocks X: " << numBlocks.x << std::endl;
-    std::cout << "Blocks Y: " << numBlocks.y << std::endl;
-    std::cout << "Blocks Z: " << numBlocks.z << std::endl;
-    std::cout << "Total threads per block: " << threadsPerBlock.x * threadsPerBlock.y << std::endl;
-
-    // Validate dimensions
-    if (conv_output_width <= 0 || conv_output_height <= 0) {
-        throw std::runtime_error("Invalid output dimensions");
-    }
-
-    // 1. Convolution with 3D grid
-    conv_forward_kernel<<<numBlocks, threadsPerBlock>>>(
+    // Launch kernel with dynamic shared memory
+    conv_forward_kernel<<<numBlocks, threadsPerBlock, shared_mem_size>>>(
         d_input, d_weights, d_biases, d_conv_output_cache,
         batch_size, in_channels, out_channels,
         height, width, kernel_size, stride, padding,
