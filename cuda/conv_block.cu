@@ -539,58 +539,7 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
     if (!streams_initialized) {
         throw std::runtime_error("Streams not initialized");
     }
-    // Debug dimensions
-    std::cout << "\nBackward pass dimensions for ConvBlock:" << std::endl;
-    std::cout << "batch_size: " << batch_size << std::endl;
-    std::cout << "in_channels: " << in_channels << std::endl;
-    std::cout << "input_height: " << input_height << std::endl;
-    std::cout << "input_width: " << input_width << std::endl;
-
-    // Calculate each dimension separately for debugging
-    size_t dim1 = static_cast<size_t>(batch_size);
-    size_t dim2 = static_cast<size_t>(in_channels);
-    size_t dim3 = static_cast<size_t>(input_height);
-    size_t dim4 = static_cast<size_t>(input_width);
     
-    std::cout << "Dimension products:" << std::endl;
-    std::cout << "dim1 (batch_size): " << dim1 << std::endl;
-    std::cout << "dim1 * dim2: " << (dim1 * dim2) << std::endl;
-    std::cout << "dim1 * dim2 * dim3: " << (dim1 * dim2 * dim3) << std::endl;
-    std::cout << "dim1 * dim2 * dim3 * dim4: " << (dim1 * dim2 * dim3 * dim4) << std::endl;
-
-    // Calculate total size
-    size_t total_elements = dim1 * dim2 * dim3 * dim4;
-    size_t total_bytes = total_elements * sizeof(float);
-
-    std::cout << "Total elements: " << total_elements << std::endl;
-    std::cout << "Total bytes to set: " << total_bytes << std::endl;
-    std::cout << "d_grad_input pointer: " << d_grad_input << std::endl;
-
-    // Verify dimensions are valid
-    if (total_elements == 0) {
-        throw std::runtime_error("total_elements is 0 - dimensions not properly set");
-    }
-    if (input_height == 0 || input_width == 0) {
-        throw std::runtime_error("input dimensions are 0");
-    }
-
-    // Check for potential overflow
-    if (total_bytes / sizeof(float) != total_elements) {
-        throw std::runtime_error("Size calculation overflow detected");
-    }
-
-    // Verify memory pointer
-    if (d_grad_input == nullptr) {
-        throw std::runtime_error("d_grad_input is null");
-    }
-
-    // Get device properties
-    cudaDeviceProp prop;
-    cudaGetDeviceProperties(&prop, 0);
-    size_t total_memory = prop.totalGlobalMem;
-    std::cout << "Total GPU memory: " << total_memory << " bytes" << std::endl;
-    std::cout << "Requested memory: " << total_bytes << " bytes" << std::endl;
-
     CHECK_CUDA_ERROR(cudaDeviceSynchronize());
     cudaStreamSynchronize(stream1);
     cudaStreamSynchronize(stream2);
