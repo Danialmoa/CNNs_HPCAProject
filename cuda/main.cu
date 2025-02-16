@@ -159,16 +159,16 @@ int main() {
                     std::cout << "Batch " << batch + 1 << "/" << num_batches << " - Loss: " << batch_loss << " - Accuracy: " << batch_accuracy * 100 << "%" << std::endl;
                     epoch_loss += batch_loss;
                     epoch_accuracy += batch_accuracy;
-                    
+                    cudaMemGetInfo(&free_memory, &total_memory);
+                    std::cout << "Available GPU memory: " << free_memory / 1024 / 1024 << "MB" << std::endl;
+                
                     // Backward pass
                     fc.backward(d_batch_labels, d_grad_fc_output, batch_size);
                     conv3.backward(d_grad_fc_output, d_grad_conv_3_output, batch_size, 4, 4);
                     conv2.backward(d_grad_conv_3_output, d_grad_conv_2_output, batch_size, 8, 8);
                     conv1.backward(d_grad_conv_2_output, d_grad_conv_1_output, batch_size, 16, 16);
 
-                    cudaMemGetInfo(&free_memory, &total_memory);
-                    std::cout << "Available GPU memory: " << free_memory / 1024 / 1024 << "MB" << std::endl;
-                
+                    
                     CHECK_CUDA_ERROR(cudaDeviceSynchronize());
 
                 }
