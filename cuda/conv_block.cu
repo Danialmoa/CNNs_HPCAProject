@@ -286,13 +286,27 @@ void ConvBlock::forward(const float* d_input, float* d_output,
     dim3 numBlocks(
         (conv_output_width + threadsPerBlock.x - 1) / threadsPerBlock.x,
         (conv_output_height + threadsPerBlock.y - 1) / threadsPerBlock.y,
-        batch_size 
+        batch_size * out_channels
     );
 
-    // Print launch configuration
-    std::cout << "Launch config:" << std::endl;
-    std::cout << "Grid: " << numBlocks.x << "x" << numBlocks.y << "x" << numBlocks.z << std::endl;
-    std::cout << "Block: " << threadsPerBlock.x << "x" << threadsPerBlock.y << std::endl;
+    // Add validation before kernel launch
+    if (numBlocks.x == 0 || numBlocks.y == 0 || numBlocks.z == 0) {
+        throw std::runtime_error("Invalid block configuration");
+    }
+
+    // Add more detailed debug information
+    std::cout << "Detailed grid configuration:" << std::endl;
+    std::cout << "conv_output_width: " << conv_output_width << std::endl;
+    std::cout << "conv_output_height: " << conv_output_height << std::endl;
+    std::cout << "Blocks X: " << numBlocks.x << std::endl;
+    std::cout << "Blocks Y: " << numBlocks.y << std::endl;
+    std::cout << "Blocks Z: " << numBlocks.z << std::endl;
+    std::cout << "Total threads per block: " << threadsPerBlock.x * threadsPerBlock.y << std::endl;
+
+    // Validate dimensions
+    if (conv_output_width <= 0 || conv_output_height <= 0) {
+        throw std::runtime_error("Invalid output dimensions");
+    }
 
     // 1. Convolution with 3D grid
     conv_forward_kernel<<<numBlocks, threadsPerBlock>>>(
