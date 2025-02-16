@@ -254,10 +254,7 @@ ConvBlock::ConvBlock(int in_ch, int out_ch, int k_size,
 // Forward pass
 void ConvBlock::forward(const float* d_input, float* d_output, 
                        int batch_size, int height, int width) {
-    if (batch_size != current_batch_size) {
-        allocate_memory(batch_size);
-    }
-    
+
     // Save input dimensions
     input_height = height;
     input_width = width;
@@ -268,18 +265,10 @@ void ConvBlock::forward(const float* d_input, float* d_output,
     pool_output_height = (conv_output_height - pool_size) / pool_stride + 1;
     pool_output_width = (conv_output_width - pool_size) / pool_stride + 1;
 
-    std::cout << "conv_output_height: " << conv_output_height << std::endl;
-    std::cout << "conv_output_width: " << conv_output_width << std::endl;
-    std::cout << "pool_output_height: " << pool_output_height << std::endl;
-    std::cout << "pool_output_width: " << pool_output_width << std::endl;
-    std::cout << "batch_size: " << batch_size << std::endl;
-    std::cout << "in_channels: " << in_channels << std::endl;
-    std::cout << "out_channels: " << out_channels << std::endl;
-    std::cout << "height: " << height << std::endl;
-    std::cout << "width: " << width << std::endl;
-    std::cout << "kernel_size: " << kernel_size << std::endl;
-    std::cout << "stride: " << stride << std::endl;
-    
+    if (batch_size != current_batch_size) {
+        allocate_memory(batch_size);
+    }
+
     // 1. Convolution
     dim3 conv_grid(batch_size, out_channels, conv_output_height * conv_output_width);
     conv_forward_kernel<<<conv_grid, 1>>>(
@@ -415,6 +404,14 @@ ConvBlock::~ConvBlock() {
 void ConvBlock::allocate_memory(int batch_size) {
     // Free existing memory if any
     free_memory();
+
+    std::cout << "input_height: " << input_height << std::endl;
+    std::cout << "input_width: " << input_width << std::endl;
+    std::cout << "kernel_size: " << kernel_size << std::endl;
+    std::cout << "stride: " << stride << std::endl;
+    std::cout << "padding: " << padding << std::endl;
+    std::cout << "pool_size: " << pool_size << std::endl;
+    std::cout << "pool_stride: " << pool_stride << std::endl;
 
     // Calculate output dimensions
     conv_output_height = (input_height + 2 * padding - kernel_size) / stride + 1;
