@@ -274,7 +274,11 @@ void ConvBlock::forward(const float* d_input, float* d_output,
     CHECK_CUDA_ERROR(cudaMemcpy(d_cache, d_input, input_size * sizeof(float), 
                                cudaMemcpyDeviceToDevice));
     // 1. Convolution
-    dim3 conv_grid(batch_size, out_channels, conv_output_height * conv_output_width);
+    const int max_grid_dim = 65535; 
+    dim3 conv_grid;
+    conv_grid.x = batch_size;
+    conv_grid.y = out_channels;
+    conv_grid.z = min(conv_output_height * conv_output_width, max_grid_dim);
     conv_forward_kernel<<<conv_grid, 1>>>(
         d_input, d_weights, d_biases, d_conv_output_cache,
         batch_size, in_channels, out_channels,
@@ -292,9 +296,10 @@ void ConvBlock::forward(const float* d_input, float* d_output,
     CHECK_LAST_CUDA_ERROR();
     
     // 3. Max Pooling
-    dim3 pool_grid(batch_size, out_channels, 
-                   pool_output_height * pool_output_width);
-    
+    dim3 pool_grid;
+    pool_grid.x = batch_size;
+    pool_grid.y = out_channels;
+    pool_grid.z = min(pool_output_height * pool_output_width, max_grid_dim);
     max_pool_kernel<<<pool_grid, 1>>>(
         d_conv_output_cache, d_output, d_pool_indices,
         batch_size, out_channels,
