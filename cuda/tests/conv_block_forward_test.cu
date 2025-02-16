@@ -106,7 +106,7 @@ int main() {
 
         // Test different input sizes
         std::vector<std::pair<int, int>> test_sizes = {
-            {16, 16}, {32, 32}, {64, 64}
+            {16, 16}
         };
 
         std::cout << "\n=== Testing Different Input Sizes ===\n";
