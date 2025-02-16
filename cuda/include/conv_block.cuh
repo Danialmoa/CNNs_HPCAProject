@@ -36,6 +36,7 @@ private:
     // Helper functions
     void allocate_memory(int batch_size);
     void free_memory();
+    void init_weights_and_optimizers(); 
     void clear_cache() {
         cudaDeviceSynchronize();
     }
