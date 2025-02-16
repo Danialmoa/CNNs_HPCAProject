@@ -104,7 +104,7 @@ int main() {
             float *d_conv_2_output = nullptr;
             float *d_conv_3_output = nullptr;
             float *d_fc_output = nullptr;
-            
+
             float *d_grad_conv_1_output = nullptr;
             float *d_grad_conv_2_output = nullptr;
             float *d_grad_conv_3_output = nullptr;
@@ -124,6 +124,7 @@ int main() {
             CHECK_CUDA_ERROR(cudaMalloc(&d_conv_2_output, conv2_output_size * sizeof(float)));
             CHECK_CUDA_ERROR(cudaMalloc(&d_conv_3_output, conv3_output_size * sizeof(float)));
             CHECK_CUDA_ERROR(cudaMalloc(&d_fc_output, fc_output_size * sizeof(float)));
+
             CHECK_CUDA_ERROR(cudaMalloc(&d_grad_conv_1_output, conv1_output_size * sizeof(float)));
             CHECK_CUDA_ERROR(cudaMalloc(&d_grad_conv_2_output, conv2_output_size * sizeof(float)));
             CHECK_CUDA_ERROR(cudaMalloc(&d_grad_conv_3_output, conv3_output_size * sizeof(float)));
@@ -158,6 +159,7 @@ int main() {
                     epoch_accuracy += batch_accuracy;
                     
                     // Backward pass
+                    CHECK_CUDA_ERROR(cudaStreamSynchronize(stream));
                     fc.backward(d_batch_labels, d_grad_fc_output, batch_size);
                     conv3.backward(d_grad_fc_output, d_grad_conv_3_output, batch_size);
                     conv2.backward(d_grad_conv_3_output, d_grad_conv_2_output, batch_size);
