@@ -104,23 +104,30 @@ int main() {
             float *d_conv_2_output = nullptr;
             float *d_conv_3_output = nullptr;
             float *d_fc_output = nullptr;
+            
             float *d_grad_conv_1_output = nullptr;
             float *d_grad_conv_2_output = nullptr;
             float *d_grad_conv_3_output = nullptr;
             float *d_grad_fc_output = nullptr;
+
+
+            const int conv1_output_size = batch_size * 32 * 16 * 16;
+            const int conv2_output_size = batch_size * 64 * 8 * 8;
+            const int conv3_output_size = batch_size * 128 * 4 * 4;
+            const int fc_output_size = batch_size * 10;
             
        
             // Allocate memory
             CHECK_CUDA_ERROR(cudaMalloc(&d_batch_images, batch_size * 3 * 32 * 32 * sizeof(float)));
             CHECK_CUDA_ERROR(cudaMalloc(&d_batch_labels, batch_size * 10 * sizeof(uint8_t)));
-            CHECK_CUDA_ERROR(cudaMalloc(&d_conv_1_output, batch_size * 32 * 16 * 16 * sizeof(float)));
-            CHECK_CUDA_ERROR(cudaMalloc(&d_conv_2_output, batch_size * 64 * 8 * 8 * sizeof(float)));
-            CHECK_CUDA_ERROR(cudaMalloc(&d_conv_3_output, batch_size * 128 * 4 * 4 * sizeof(float)));
-            CHECK_CUDA_ERROR(cudaMalloc(&d_fc_output, batch_size * 10 * sizeof(float)));
-            CHECK_CUDA_ERROR(cudaMalloc(&d_grad_conv_1_output, batch_size * 32 * 16 * 16 * sizeof(float)));
-            CHECK_CUDA_ERROR(cudaMalloc(&d_grad_conv_2_output, batch_size * 64 * 8 * 8 * sizeof(float)));
-            CHECK_CUDA_ERROR(cudaMalloc(&d_grad_conv_3_output, batch_size * 128 * 4 * 4 * sizeof(float)));
-            CHECK_CUDA_ERROR(cudaMalloc(&d_grad_fc_output, batch_size * 10 * sizeof(float)));
+            CHECK_CUDA_ERROR(cudaMalloc(&d_conv_1_output, conv1_output_size * sizeof(float)));
+            CHECK_CUDA_ERROR(cudaMalloc(&d_conv_2_output, conv2_output_size * sizeof(float)));
+            CHECK_CUDA_ERROR(cudaMalloc(&d_conv_3_output, conv3_output_size * sizeof(float)));
+            CHECK_CUDA_ERROR(cudaMalloc(&d_fc_output, fc_output_size * sizeof(float)));
+            CHECK_CUDA_ERROR(cudaMalloc(&d_grad_conv_1_output, conv1_output_size * sizeof(float)));
+            CHECK_CUDA_ERROR(cudaMalloc(&d_grad_conv_2_output, conv2_output_size * sizeof(float)));
+            CHECK_CUDA_ERROR(cudaMalloc(&d_grad_conv_3_output, conv3_output_size * sizeof(float)));
+            CHECK_CUDA_ERROR(cudaMalloc(&d_grad_fc_output, fc_output_size * sizeof(float)));
             
             cudaStream_t stream;
             CHECK_CUDA_ERROR(cudaStreamCreate(&stream));
