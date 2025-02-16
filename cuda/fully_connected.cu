@@ -216,20 +216,20 @@ void FullyConnectedLayer::backward(const uint8_t* d_labels, float* d_grad_input,
     cudaStreamSynchronize(stream1);
     cudaStreamSynchronize(stream2);
     cudaStreamSynchronize(stream3);
-    
+
+    size_t input_grad_size = batch_size * in_features;
+    size_t weight_size = num_classes * in_features;
+    size_t bias_size = num_classes;
+
     // Allocate memory for gradients
     float *d_grad_weights, *d_grad_biases;
-    CHECK_CUDA_ERROR(cudaMalloc(&d_grad_weights, 
-                               num_classes * in_features * sizeof(float)));
-    CHECK_CUDA_ERROR(cudaMalloc(&d_grad_biases, num_classes * sizeof(float)));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_grad_weights, weight_size * sizeof(float)));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_grad_biases, bias_size * sizeof(float)));
     
     // Zero out gradients
-    CHECK_CUDA_ERROR(cudaMemsetAsync(d_grad_weights, 0, 
-                               num_classes * in_features * sizeof(float), stream1));
-    CHECK_CUDA_ERROR(cudaMemsetAsync(d_grad_biases, 0, 
-                               num_classes * sizeof(float), stream2));
-    CHECK_CUDA_ERROR(cudaMemsetAsync(d_grad_input, 0, 
-                               batch_size * in_features * sizeof(float), stream3));
+    CHECK_CUDA_ERROR(cudaMemsetAsync(d_grad_weights, 0, weight_size * sizeof(float), stream1));
+    CHECK_CUDA_ERROR(cudaMemsetAsync(d_grad_biases, 0, bias_size * sizeof(float), stream2));
+    CHECK_CUDA_ERROR(cudaMemsetAsync(d_grad_input, 0, input_grad_size * sizeof(float), stream3));
 
     cudaStreamSynchronize(stream1);
     cudaStreamSynchronize(stream2);
