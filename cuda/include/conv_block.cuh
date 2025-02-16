@@ -37,7 +37,17 @@ private:
     // Helper functions
     void allocate_memory(int batch_size);
     void free_memory();
-    void init_streams();
+    void clear_cache() {
+        cudaDeviceSynchronize();
+    }
+    void init_streams() {
+        if (!streams_initialized) {
+            CHECK_CUDA_ERROR(cudaStreamCreate(&stream1));
+            CHECK_CUDA_ERROR(cudaStreamCreate(&stream2));
+            CHECK_CUDA_ERROR(cudaStreamCreate(&stream3));
+            streams_initialized = true;
+        }
+    }
 
 public:
     ConvBlock(int in_channels, int out_channels, int kernel_size, 
