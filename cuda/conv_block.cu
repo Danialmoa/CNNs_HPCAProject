@@ -22,15 +22,20 @@ __global__ void conv_forward_kernel(
     int out_height,
     int out_width
 ) {
+    // Consider adding shared memory for input tile and weights
+    __shared__ float shared_input[BLOCK_SIZE][BLOCK_SIZE];
+    __shared__ float shared_weights[KERNEL_SIZE][KERNEL_SIZE];
+    
     const int x = blockIdx.x * blockDim.x + threadIdx.x;
     const int y = blockIdx.y * blockDim.y + threadIdx.y;
-    const int out_ch = blockIdx.z;
+    const int ch = blockIdx.z % channels;
+    const int batch = blockIdx.z / channels;
     
-    if (x >= out_width || y >= out_height || out_ch >= out_channels) return;
+    if (x >= out_width || y >= out_height || ch >= channels || batch >= batch_size) return;
     
     // Process all batches in this thread
     for (int batch = 0; batch < batch_size; batch++) {
-        float sum = biases[out_ch];
+        float sum = biases[ch];
         
         for (int in_ch = 0; in_ch < in_channels; in_ch++) {
             for (int kh = 0; kh < kernel_size; kh++) {
@@ -40,14 +45,14 @@ __global__ void conv_forward_kernel(
                     
                     if (h_in >= 0 && h_in < height && w_in >= 0 && w_in < width) {
                         int input_idx = ((batch * in_channels + in_ch) * height + h_in) * width + w_in;
-                        int weight_idx = ((out_ch * in_channels + in_ch) * kernel_size + kh) * kernel_size + kw;
+                        int weight_idx = ((ch * in_channels + in_ch) * kernel_size + kh) * kernel_size + kw;
                         sum += input[input_idx] * weights[weight_idx];
                     }
                 }
             }
         }
         
-        output[((batch * out_channels + out_ch) * out_height + y) * out_width + x] = sum;
+        output[((batch * out_channels + ch) * out_height + y) * out_width + x] = sum;
     }
 }
 
@@ -264,11 +269,7 @@ void ConvBlock::forward(const float* d_input, float* d_output,
         batch_size * in_channels * height * width * sizeof(float), 
         cudaMemcpyDeviceToDevice));
 
-    // Get device properties
-    cudaDeviceProp prop;
-    cudaGetDeviceProperties(&prop, 0);
-    std::cout << "Max grid size Z: " << prop.maxGridSize[2] << std::endl;
-
+    
     // Print more detailed debug info
     std::cout << "Debug Info:" << std::endl;
     std::cout << "batch_size: " << batch_size << std::endl;
