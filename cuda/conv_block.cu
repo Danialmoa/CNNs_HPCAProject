@@ -256,16 +256,10 @@ ConvBlock::ConvBlock(int in_ch, int out_ch, int k_size,
     : in_channels(in_ch), out_channels(out_ch), kernel_size(k_size),
       stride(s), padding(p), pool_size(pool_s), pool_stride(pool_str),
       learning_rate(lr), current_batch_size(0), streams_initialized(false),
+      d_cache(nullptr), d_conv_output_cache(nullptr), d_pool_indices(nullptr),
+      d_weights(nullptr), d_biases(nullptr),
       weights_optimizer(lr), bias_optimizer(lr) {
     
-    // Initialize pointers to nullptr
-    d_cache = nullptr;
-    d_conv_output_cache = nullptr;
-    d_pool_indices = nullptr;
-    d_weights = nullptr;
-    d_biases = nullptr;
-
-        
     init_weights_and_optimizers();
 }
 void ConvBlock::init_weights_and_optimizers() {
@@ -306,6 +300,11 @@ void ConvBlock::init_weights_and_optimizers() {
 // Forward pass
 void ConvBlock::forward(const float* d_input, float* d_output, 
                        int batch_size, int height, int width) {
+    // Initialize streams if not already done
+    if (!streams_initialized) {
+        init_streams();
+    }
+
     // Set dimensions
     input_height = height;
     input_width = width;
@@ -318,45 +317,45 @@ void ConvBlock::forward(const float* d_input, float* d_output,
         allocate_memory(batch_size);
     }
 
-    // Add error checking
-    if (d_cache == nullptr) {
-        throw std::runtime_error("d_cache is null. Memory allocation failed.");
-    }
-
     // Cache input for backward pass
     size_t input_size = batch_size * in_channels * height * width * sizeof(float);
     CHECK_CUDA_ERROR(cudaMemcpy(d_cache, d_input, input_size, cudaMemcpyDeviceToDevice));
 
+    // Ensure batch_size is divisible by number of streams
+    int streams_count = 3;
+    int stream_batch_size = (batch_size + streams_count - 1) / streams_count;
+
     dim3 threadsPerBlock(16, 16);
-    dim3 numBlocks(
-        (conv_output_width + threadsPerBlock.x - 1) / threadsPerBlock.x,
-        (conv_output_height + threadsPerBlock.y - 1) / threadsPerBlock.y,
-        out_channels * batch_size
-    );
     
     // Calculate shared memory size
     size_t shared_mem_size = (
-        // Input tile size
         (threadsPerBlock.x + kernel_size - 1) * (threadsPerBlock.y + kernel_size - 1) +
-        // Weight tile size
         kernel_size * kernel_size
     ) * sizeof(float);
 
-    // Split the work across streams
-    int stream_batch_size = batch_size / 3;
-    for (int i = 0; i < 3; i++) {
+    // Check shared memory size against device limit
+    cudaDeviceProp prop;
+    cudaGetDeviceProperties(&prop, 0);
+    if (shared_mem_size > prop.sharedMemPerBlock) {
+        throw std::runtime_error("Shared memory size exceeds device limit");
+    }
+
+    // Process batches in streams
+    for (int i = 0; i < streams_count; i++) {
         int start_batch = i * stream_batch_size;
-        int current_batch_size = (i == 2) ? batch_size - start_batch : stream_batch_size;
+        int current_batch_size = std::min(stream_batch_size, batch_size - start_batch);
         
-        dim3 stream_blocks(
-            numBlocks.x,
-            numBlocks.y,
-            out_channels * current_batch_size
+        if (current_batch_size <= 0) continue;
+
+        dim3 numBlocks(
+            (conv_output_width + threadsPerBlock.x - 1) / threadsPerBlock.x,
+            (conv_output_height + threadsPerBlock.y - 1) / threadsPerBlock.y,
+            current_batch_size * out_channels
         );
-        
+
         cudaStream_t current_stream = (i == 0) ? stream1 : (i == 1) ? stream2 : stream3;
-        
-        conv_forward_kernel<<<stream_blocks, threadsPerBlock, shared_mem_size, current_stream>>>(
+
+        conv_forward_kernel<<<numBlocks, threadsPerBlock, shared_mem_size, current_stream>>>(
             d_input + start_batch * in_channels * height * width,
             d_weights,
             d_biases,
@@ -372,26 +371,30 @@ void ConvBlock::forward(const float* d_input, float* d_output,
             conv_output_height,
             conv_output_width
         );
+        CHECK_LAST_CUDA_ERROR();
     }
-    
-    // 2. ReLU
+
+    // Synchronize after convolution
+    cudaDeviceSynchronize();
+
+    // ReLU and pooling can be done on the entire batch at once
     const int total_conv_elements = batch_size * out_channels * conv_output_height * conv_output_width;
     const int relu_threads = 256;
     const int relu_blocks = (total_conv_elements + relu_threads - 1) / relu_threads;
     
     relu_kernel<<<relu_blocks, relu_threads>>>(
-        d_conv_output_cache, total_conv_elements
+        d_conv_output_cache,
+        total_conv_elements
     );
     CHECK_LAST_CUDA_ERROR();
-    
-    // 3. Max Pooling
+
     dim3 poolThreads(16, 16);
     dim3 poolBlocks(
         (pool_output_width + poolThreads.x - 1) / poolThreads.x,
         (pool_output_height + poolThreads.y - 1) / poolThreads.y,
         batch_size * out_channels
     );
-    
+
     max_pool_kernel<<<poolBlocks, poolThreads>>>(
         d_conv_output_cache,
         d_output,
@@ -522,9 +525,10 @@ ConvBlock::~ConvBlock() {
 }
 
 void ConvBlock::allocate_memory(int batch_size) {
-    // Free existing memory if any
+    // Synchronize before freeing memory
+    cudaDeviceSynchronize();
     free_memory();
-    CHECK_CUDA_ERROR(cudaDeviceSynchronize());
+    
     // Calculate output dimensions
     conv_output_height = (input_height + 2 * padding - kernel_size) / stride + 1;
     conv_output_width = (input_width + 2 * padding - kernel_size) / stride + 1;
@@ -534,13 +538,20 @@ void ConvBlock::allocate_memory(int batch_size) {
     // Calculate sizes
     size_t input_size = batch_size * in_channels * input_height * input_width;
     size_t conv_size = batch_size * out_channels * conv_output_height * conv_output_width;
-    size_t pool_size = batch_size * out_channels * pool_output_height * pool_output_width;
+    size_t pool_indices_size = batch_size * out_channels * pool_output_height * pool_output_width;
 
-    // Allocate memory
-    CHECK_CUDA_ERROR(cudaMalloc(&d_cache, input_size * sizeof(float)));
-    CHECK_CUDA_ERROR(cudaMalloc(&d_conv_output_cache, conv_size * sizeof(float)));
-    CHECK_CUDA_ERROR(cudaMalloc(&d_pool_indices, pool_size * sizeof(int)));
+    // Allocate memory with error checking
+    cudaError_t err;
     
+    err = cudaMalloc(&d_cache, input_size * sizeof(float));
+    if (err != cudaSuccess) throw std::runtime_error("Failed to allocate d_cache");
+    
+    err = cudaMalloc(&d_conv_output_cache, conv_size * sizeof(float));
+    if (err != cudaSuccess) throw std::runtime_error("Failed to allocate d_conv_output_cache");
+    
+    err = cudaMalloc(&d_pool_indices, pool_indices_size * sizeof(int));
+    if (err != cudaSuccess) throw std::runtime_error("Failed to allocate d_pool_indices");
+
     current_batch_size = batch_size;
 }
 
