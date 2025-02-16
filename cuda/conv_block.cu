@@ -549,11 +549,15 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
     // Calculate sizes
     size_t weight_size = out_channels * in_channels * kernel_size * kernel_size;
     size_t bias_size = out_channels;
-    size_t input_size = static_cast<size_t>(batch_size) * 
-                       static_cast<size_t>(in_channels) * 
-                       static_cast<size_t>(input_height) * 
-                       static_cast<size_t>(input_width);
+    size_t input_size = batch_size * in_channels * input_height * input_width;
+    size_t conv_output_size = batch_size * out_channels * conv_output_height * conv_output_width;
 
+    std::cout << "Backward pass dimensions:" << std::endl;
+    std::cout << "Input size: " << input_size << std::endl;
+    std::cout << "Conv output size: " << conv_output_size << std::endl;
+    std::cout << "Weight size: " << weight_size << std::endl;
+    std::cout << "Bias size: " << bias_size << std::endl;
+    
     // Allocate temporary gradient buffers
     float *d_grad_weights, *d_grad_biases;
     CHECK_CUDA_ERROR(cudaMalloc(&d_grad_weights, weight_size * sizeof(float)));
