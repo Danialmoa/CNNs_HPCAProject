@@ -269,6 +269,10 @@ void ConvBlock::forward(const float* d_input, float* d_output,
         allocate_memory(batch_size);
     }
 
+    // Copy input to cache
+    size_t input_size = (size_t)batch_size * in_channels * height * width;
+    CHECK_CUDA_ERROR(cudaMemcpy(d_cache, d_input, input_size * sizeof(float), 
+                               cudaMemcpyDeviceToDevice));
     // 1. Convolution
     dim3 conv_grid(batch_size, out_channels, conv_output_height * conv_output_width);
     conv_forward_kernel<<<conv_grid, 1>>>(
@@ -404,7 +408,8 @@ ConvBlock::~ConvBlock() {
 void ConvBlock::allocate_memory(int batch_size) {
     // Free existing memory if any
     free_memory();
-
+    std::cout << "Allocating memory for batch size: " << batch_size << std::endl;
+    std::cout << "--------------------------------" << std::endl;
     std::cout << "input_height: " << input_height << std::endl;
     std::cout << "input_width: " << input_width << std::endl;
     std::cout << "kernel_size: " << kernel_size << std::endl;
