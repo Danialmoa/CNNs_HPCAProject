@@ -552,7 +552,12 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
     size_t input_size = batch_size * in_channels * input_height * input_width;
     size_t conv_output_size = batch_size * out_channels * conv_output_height * conv_output_width;
 
-    std::cout << "Backward pass dimensions:" << std::endl;
+    std::cout << "\nBackward pass dimensions for ConvBlock:" << std::endl;
+    std::cout << "Batch size: " << batch_size << std::endl;
+    std::cout << "Input height: " << input_height << std::endl;
+    std::cout << "Input width: " << input_width << std::endl;
+    std::cout << "In channels: " << in_channels << std::endl;
+    std::cout << "Out channels: " << out_channels << std::endl;
     std::cout << "Input size: " << input_size << std::endl;
     std::cout << "Conv output size: " << conv_output_size << std::endl;
     std::cout << "Weight size: " << weight_size << std::endl;
