@@ -102,6 +102,67 @@ int main() {
         print_tensor(h_output.data(), out_channels, pool_out_height, pool_out_width, 
                     "Final Output (first batch)");
 
+        // After forward pass, create a simple gradient for backward pass
+        std::vector<float> h_grad_output(batch_size * out_channels * pool_out_height * pool_out_width);
+        
+        // Initialize gradient with a simple pattern (all 1.0s for simplicity)
+        for (size_t i = 0; i < h_grad_output.size(); i++) {
+            h_grad_output[i] = 1.0f;
+        }
+
+        // Allocate device memory for gradients
+        float *d_grad_output, *d_grad_input;
+        cudaMalloc(&d_grad_output, h_grad_output.size() * sizeof(float));
+        cudaMalloc(&d_grad_input, batch_size * in_channels * height * width * sizeof(float));
+
+        // Copy gradient to device
+        cudaMemcpy(d_grad_output, h_grad_output.data(), 
+                  h_grad_output.size() * sizeof(float), 
+                  cudaMemcpyHostToDevice);
+
+        std::cout << "\n=== Testing Backward Pass ===\n";
+        
+        // Print gradient input
+        print_tensor(h_grad_output.data(), out_channels, pool_out_height, pool_out_width, 
+                    "Gradient Input (first batch)");
+
+        // Backward pass
+        conv_block.backward(d_grad_output, d_grad_input, batch_size);
+
+        // Get gradients with respect to input
+        std::vector<float> h_grad_input(batch_size * in_channels * height * width);
+        cudaMemcpy(h_grad_input.data(), d_grad_input, 
+                  h_grad_input.size() * sizeof(float), 
+                  cudaMemcpyDeviceToHost);
+
+        // Print input gradients
+        print_tensor(h_grad_input.data(), in_channels, height, width, 
+                    "Gradient w.r.t Input (first batch)");
+
+        // Get updated weights and biases
+        std::vector<float> h_updated_weights(out_channels * in_channels * kernel_size * kernel_size);
+        std::vector<float> h_updated_biases(out_channels);
+
+        cudaMemcpy(h_updated_weights.data(), conv_block.get_weights(), 
+                  h_updated_weights.size() * sizeof(float), 
+                  cudaMemcpyDeviceToHost);
+        cudaMemcpy(h_updated_biases.data(), conv_block.get_biases(), 
+                  h_updated_biases.size() * sizeof(float), 
+                  cudaMemcpyDeviceToHost);
+
+        // Print weight updates (just a sample)
+        std::cout << "\nUpdated Weights (first few values):\n";
+        for (int i = 0; i < std::min(10, (int)h_updated_weights.size()); i++) {
+            std::cout << h_updated_weights[i] << " ";
+        }
+        std::cout << "...\n";
+
+        // Print bias updates
+        std::cout << "\nUpdated Biases:\n";
+        for (int i = 0; i < out_channels; i++) {
+            std::cout << "Channel " << i << ": " << h_updated_biases[i] << "\n";
+        }
+
         // Check for any CUDA errors
         cudaError_t err = cudaGetLastError();
         if (err != cudaSuccess) {
@@ -111,8 +172,10 @@ int main() {
         // Cleanup
         cudaFree(d_input);
         cudaFree(d_output);
+        cudaFree(d_grad_output);
+        cudaFree(d_grad_input);
 
-        std::cout << "\nTest completed successfully!\n";
+        std::cout << "\nBackward pass test completed successfully!\n";
         
     } catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << std::endl;

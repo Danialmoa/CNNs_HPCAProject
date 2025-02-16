@@ -62,4 +62,8 @@ public:
 
     // Getter for conv output cache (for testing)
     const float* get_conv_output_cache() const { return d_conv_output_cache; }
+
+    // Getters for weights and biases (for testing)
+    const float* get_weights() const { return d_weights; }
+    const float* get_biases() const { return d_biases; }
 };
