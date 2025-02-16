@@ -557,7 +557,7 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
     std::cout << "Conv output size: " << conv_output_size << std::endl;
     std::cout << "Weight size: " << weight_size << std::endl;
     std::cout << "Bias size: " << bias_size << std::endl;
-    
+
     // Allocate temporary gradient buffers
     float *d_grad_weights, *d_grad_biases;
     CHECK_CUDA_ERROR(cudaMalloc(&d_grad_weights, weight_size * sizeof(float)));
@@ -576,7 +576,6 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
 
     // Allocate and initialize unpooled gradients
     float* d_unpooled_grad;
-    size_t conv_output_size = batch_size * out_channels * conv_output_height * conv_output_width;
     CHECK_CUDA_ERROR(cudaMalloc(&d_unpooled_grad, conv_output_size * sizeof(float)));
     CHECK_CUDA_ERROR(cudaMemsetAsync(d_unpooled_grad, 0, conv_output_size * sizeof(float), stream1));
     
