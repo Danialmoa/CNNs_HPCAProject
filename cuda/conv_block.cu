@@ -52,18 +52,18 @@ __global__ void conv_forward_kernel(
     output[idx] = sum;
 }
 
-// ReLU kernel
+// ReLU kernel with 1D indexing
 __global__ void relu_kernel(
     float* data,
     int size
 ) {
-    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    const int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < size) {
         data[idx] = fmaxf(data[idx], 0.0f);
     }
 }
 
-// max pooling kernel
+// Max pooling kernel with 1D indexing
 __global__ void max_pool_kernel(
     const float* input,
     float* output,
@@ -77,36 +77,37 @@ __global__ void max_pool_kernel(
     int out_height,
     int out_width
 ) {
-    int batch = blockIdx.x;
-    int channel = blockIdx.y;
-    int h = blockIdx.z / out_width;
-    int w = blockIdx.z % out_width;
+    const int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    const int total_elements = batch_size * channels * out_height * out_width;
     
-    if (batch >= batch_size || channel >= channels || 
-        h >= out_height || w >= out_width) return;
+    if (idx >= total_elements) return;
+    
+    const int w_out = idx % out_width;
+    const int h_out = (idx / out_width) % out_height;
+    const int ch = (idx / (out_width * out_height)) % channels;
+    const int batch = idx / (out_width * out_height * channels);
     
     float max_val = -INFINITY;
     int max_idx = -1;
     
     for (int ph = 0; ph < pool_size; ph++) {
         for (int pw = 0; pw < pool_size; pw++) {
-            int h_in = h * stride + ph;
-            int w_in = w * stride + pw;
+            int h_in = h_out * stride + ph;
+            int w_in = w_out * stride + pw;
             
             if (h_in < height && w_in < width) {
-                int idx = ((batch * channels + channel) * height + h_in) * width + w_in;
-                float val = input[idx];
+                int in_idx = ((batch * channels + ch) * height + h_in) * width + w_in;
+                float val = input[in_idx];
                 if (val > max_val) {
                     max_val = val;
-                    max_idx = idx;
+                    max_idx = in_idx;
                 }
             }
         }
     }
     
-    int out_idx = ((batch * channels + channel) * out_height + h) * out_width + w;
-    output[out_idx] = max_val;
-    indices[out_idx] = max_idx;
+    output[idx] = max_val;
+    indices[idx] = max_idx;
 }
 
 // Max pooling backward kernel
@@ -278,19 +279,16 @@ void ConvBlock::forward(const float* d_input, float* d_output,
     CHECK_LAST_CUDA_ERROR();
     
     // 2. ReLU
-    int conv_size = batch_size * out_channels * conv_output_height * conv_output_width;
-    int block_size = 256;
-    int num_blocks = (conv_size + block_size - 1) / block_size;
-    
-    relu_kernel<<<num_blocks, block_size>>>(d_conv_output_cache, conv_size);
+    relu_kernel<<<num_blocks, threads_per_block>>>(
+        d_conv_output_cache, total_elements
+    );
     CHECK_LAST_CUDA_ERROR();
     
     // 3. Max Pooling
-    dim3 pool_grid;
-    pool_grid.x = batch_size;
-    pool_grid.y = out_channels;
-    pool_grid.z = min(pool_output_height * pool_output_width, max_grid_dim);
-    max_pool_kernel<<<pool_grid, 1>>>(
+    const int pool_elements = batch_size * out_channels * pool_output_height * pool_output_width;
+    const int pool_blocks = (pool_elements + threads_per_block - 1) / threads_per_block;
+    
+    max_pool_kernel<<<pool_blocks, threads_per_block>>>(
         d_conv_output_cache, d_output, d_pool_indices,
         batch_size, out_channels,
         conv_output_height, conv_output_width,
