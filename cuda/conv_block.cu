@@ -545,7 +545,7 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
     cudaStreamSynchronize(stream1);
     cudaStreamSynchronize(stream2);
     cudaStreamSynchronize(stream3);
-    
+
     // Calculate sizes
     size_t weight_size = out_channels * in_channels * kernel_size * kernel_size;
     size_t bias_size = out_channels;
@@ -560,6 +560,10 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
     CHECK_CUDA_ERROR(cudaMemsetAsync(d_grad_weights, 0, weight_size * sizeof(float), stream1));
     CHECK_CUDA_ERROR(cudaMemsetAsync(d_grad_biases, 0, bias_size * sizeof(float), stream2));
     CHECK_CUDA_ERROR(cudaMemsetAsync(d_grad_input, 0, input_size * sizeof(float), stream3));
+
+    cudaStreamSynchronize(stream1);
+    cudaStreamSynchronize(stream2);
+    cudaStreamSynchronize(stream3);
 
     // Allocate and initialize unpooled gradients
     float* d_unpooled_grad;
@@ -657,9 +661,9 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
 
     
     // Synchronize all streams
-    CHECK_CUDA_ERROR(cudaStreamSynchronize(stream1));
-    CHECK_CUDA_ERROR(cudaStreamSynchronize(stream2));
-    CHECK_CUDA_ERROR(cudaStreamSynchronize(stream3));
+    cudaStreamSynchronize(stream1);
+    cudaStreamSynchronize(stream2);
+    cudaStreamSynchronize(stream3);
     
     // Check for errors
     cudaError_t err = cudaGetLastError();
