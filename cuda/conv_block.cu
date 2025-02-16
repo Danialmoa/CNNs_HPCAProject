@@ -537,21 +537,40 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
     if (!streams_initialized) {
         throw std::runtime_error("Streams not initialized");
     }
+    cudaError_t stream_status;
+    stream_status = cudaStreamQuery(stream1);
+    if (stream_status != cudaSuccess && stream_status != cudaErrorNotReady) {
+        throw std::runtime_error("Stream1 is invalid");
+    }
+    stream_status = cudaStreamQuery(stream2);
+    if (stream_status != cudaSuccess && stream_status != cudaErrorNotReady) {
+        throw std::runtime_error("Stream2 is invalid");
+    }
+    stream_status = cudaStreamQuery(stream3);
+    if (stream_status != cudaSuccess && stream_status != cudaErrorNotReady) {
+        throw std::runtime_error("Stream3 is invalid");
+    }
 
     CHECK_CUDA_ERROR(cudaDeviceSynchronize());
     cudaStreamSynchronize(stream1);
     cudaStreamSynchronize(stream2);
     cudaStreamSynchronize(stream3);
 
+
     // Calculate sizes
     size_t weight_size = out_channels * in_channels * kernel_size * kernel_size;
     size_t bias_size = out_channels;
-    size_t input_size = batch_size * in_channels * input_height * input_width;
+    size_t input_size = static_cast<size_t>(batch_size) * 
+                       static_cast<size_t>(in_channels) * 
+                       static_cast<size_t>(input_height) * 
+                       static_cast<size_t>(input_width);
 
     // Allocate temporary gradient buffers
     float *d_grad_weights, *d_grad_biases;
     CHECK_CUDA_ERROR(cudaMalloc(&d_grad_weights, weight_size * sizeof(float)));
     CHECK_CUDA_ERROR(cudaMalloc(&d_grad_biases, bias_size * sizeof(float)));
+
+    CHECK_CUDA_ERROR(cudaMemset(d_grad_input, 0, input_size * sizeof(float)));
     
     // Zero out gradients
     CHECK_CUDA_ERROR(cudaMemsetAsync(d_grad_weights, 0, weight_size * sizeof(float), stream1));
