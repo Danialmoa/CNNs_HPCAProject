@@ -130,9 +130,6 @@ int main() {
             CHECK_CUDA_ERROR(cudaMalloc(&d_grad_conv_3_output, conv3_output_size * sizeof(float)));
             CHECK_CUDA_ERROR(cudaMalloc(&d_grad_fc_output, fc_grad_size * sizeof(float)));
             
-            cudaStream_t stream;
-            CHECK_CUDA_ERROR(cudaStreamCreate(&stream));
-
             // Training loop
             std::cout << "Starting training..." << std::endl;
 
@@ -159,7 +156,6 @@ int main() {
                     epoch_accuracy += batch_accuracy;
                     
                     // Backward pass
-                    CHECK_CUDA_ERROR(cudaStreamSynchronize(stream));
                     fc.backward(d_batch_labels, d_grad_fc_output, batch_size);
                     conv3.backward(d_grad_fc_output, d_grad_conv_3_output, batch_size);
                     conv2.backward(d_grad_conv_3_output, d_grad_conv_2_output, batch_size);
