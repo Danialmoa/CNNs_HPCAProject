@@ -216,6 +216,11 @@ ConvBlock::ConvBlock(int in_ch, int out_ch, int k_size,
       learning_rate(lr), current_batch_size(0), streams_initialized(false),
       weights_optimizer(lr), bias_optimizer(lr) {
     
+    // Initialize pointers to nullptr
+    d_cache = nullptr;
+    d_conv_output_cache = nullptr;
+    d_pool_indices = nullptr;
+    
     // Initialize weights and biases
     std::vector<float> h_weights(out_channels * in_channels * kernel_size * kernel_size);
     std::vector<float> h_biases(out_channels, 0.0f);
@@ -257,11 +262,14 @@ void ConvBlock::forward(const float* d_input, float* d_output,
         allocate_memory(batch_size);
     }
 
-    // Cache input for backward pass
-    CHECK_CUDA_ERROR(cudaMemcpy(d_cache, d_input, 
-        batch_size * in_channels * height * width * sizeof(float), 
-        cudaMemcpyDeviceToDevice));
+    // Add error checking
+    if (d_cache == nullptr) {
+        throw std::runtime_error("d_cache is null. Memory allocation failed.");
+    }
 
+    // Cache input for backward pass
+    size_t input_size = batch_size * in_channels * height * width * sizeof(float);
+    CHECK_CUDA_ERROR(cudaMemcpy(d_cache, d_input, input_size, cudaMemcpyDeviceToDevice));
 
     dim3 threadsPerBlock(16, 16);
     dim3 numBlocks(
@@ -418,13 +426,14 @@ void ConvBlock::allocate_memory(int batch_size) {
     pool_output_width = (conv_output_width - pool_size) / pool_stride + 1;
 
     // Calculate sizes
-    size_t conv_size = batch_size * out_channels * conv_output_height * conv_output_width;
     size_t input_size = batch_size * in_channels * input_height * input_width;
+    size_t conv_size = batch_size * out_channels * conv_output_height * conv_output_width;
+    size_t pool_size = batch_size * out_channels * pool_output_height * pool_output_width;
 
     // Allocate memory
-    CHECK_CUDA_ERROR(cudaMalloc(&d_conv_output_cache, conv_size * sizeof(float)));
-    CHECK_CUDA_ERROR(cudaMalloc(&d_pool_indices, conv_size * sizeof(int)));
     CHECK_CUDA_ERROR(cudaMalloc(&d_cache, input_size * sizeof(float)));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_conv_output_cache, conv_size * sizeof(float)));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_pool_indices, pool_size * sizeof(int)));
     
     current_batch_size = batch_size;
 }
