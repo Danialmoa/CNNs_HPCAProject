@@ -1,5 +1,4 @@
 #include "../include/conv_block.cuh"
-#include "../conv_block.cu"
 #include <iostream>
 #include <vector>
 #include <iomanip>
