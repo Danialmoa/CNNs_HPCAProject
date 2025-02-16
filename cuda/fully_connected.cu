@@ -2,6 +2,7 @@
 #include "include/adam_optimizer.cuh"
 #include <random>
 #include <cmath>
+#include <iostream>
 
 // CUDA kernels
 __global__ void fc_forward_kernel(
