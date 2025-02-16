@@ -540,16 +540,6 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
         throw std::runtime_error("Streams not initialized");
     }
 
-    size_t input_size;
-    if (in_channels == 3) {  // Conv1
-        input_size = batch_size * in_channels * 32 * 32;
-    } else if (in_channels == 32) {  // Conv2
-        input_size = batch_size * in_channels * 16 * 16;
-    } else if (in_channels == 64) {  // Conv3
-        input_size = batch_size * in_channels * 8 * 8;
-    } else {
-        throw std::runtime_error("Unknown layer configuration");
-    }
     
     CHECK_CUDA_ERROR(cudaDeviceSynchronize());
     cudaStreamSynchronize(stream1);
@@ -563,6 +553,9 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
     size_t weight_size = out_channels * in_channels * kernel_size * kernel_size;
     size_t bias_size = out_channels;
 
+    int pooled_height = (conv_output_height - pool_size) / pool_stride + 1;
+    int pooled_width = (conv_output_width - pool_size) / pool_stride + 1;
+
     // Debug print
     std::cout << "\nBackward pass dimensions for ConvBlock:" << std::endl;
     std::cout << "Batch size: " << batch_size << std::endl;
@@ -570,6 +563,8 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
     std::cout << "Input width: " << input_width << std::endl;
     std::cout << "In channels: " << in_channels << std::endl;
     std::cout << "Out channels: " << out_channels << std::endl;
+    std::cout << "Output height: " << conv_output_height << std::endl;
+    std::cout << "Output width: " << conv_output_width << std::endl;
     std::cout << "Calculated sizes:" << std::endl;
     std::cout << "Input size: " << input_size << " = " 
               << batch_size << " * " << in_channels << " * " 
