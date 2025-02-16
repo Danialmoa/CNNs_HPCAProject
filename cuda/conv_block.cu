@@ -340,7 +340,12 @@ void ConvBlock::forward(const float* d_input, float* d_output,
 }
 
 // Backward pass implementation
-void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int batch_size) {
+void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, 
+                        int batch_size, int height, int width) {
+    // Set dimensions if not already set
+    input_height = height;
+    input_width = width;
+    
     // Add check for input dimensions
     if (input_height == 0 || input_width == 0) {
         throw std::runtime_error("Input dimensions not set. Call forward() before backward()");
