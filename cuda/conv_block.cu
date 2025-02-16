@@ -303,41 +303,40 @@ void ConvBlock::forward(const float* d_input, float* d_output,
         batch_size * in_channels * height * width * sizeof(float), 
         cudaMemcpyDeviceToDevice));
 
-    
-    // Print more detailed debug info
-    std::cout << "Debug Info:" << std::endl;
-    std::cout << "batch_size: " << batch_size << std::endl;
-    std::cout << "in_channels: " << in_channels << std::endl;
-    std::cout << "out_channels: " << out_channels << std::endl;
-    std::cout << "height: " << height << std::endl;
-    std::cout << "width: " << width << std::endl;
-    std::cout << "kernel_size: " << kernel_size << std::endl;
-    std::cout << "stride: " << stride << std::endl;
-    std::cout << "padding: " << padding << std::endl;
-    std::cout << "conv_output_height: " << conv_output_height << std::endl;
-    std::cout << "conv_output_width: " << conv_output_width << std::endl;
-
-    dim3 threadsPerBlock(16, 16);
+    // Calculate grid and block dimensions
+    dim3 threadsPerBlock(BLOCK_SIZE, BLOCK_SIZE);
     dim3 numBlocks(
-        (conv_output_width + threadsPerBlock.x - 1) / threadsPerBlock.x,
-        (conv_output_height + threadsPerBlock.y - 1) / threadsPerBlock.y,
+        (conv_output_width + BLOCK_SIZE - 1) / BLOCK_SIZE,
+        (conv_output_height + BLOCK_SIZE - 1) / BLOCK_SIZE,
         out_channels
     );
 
     // Calculate shared memory size
     size_t shared_mem_size = 
-        ((BLOCK_SIZE + KERNEL_SIZE - 1) * (BLOCK_SIZE + KERNEL_SIZE - 1) + // Input tile
-         KERNEL_SIZE * KERNEL_SIZE) *                                       // Weights
+        ((BLOCK_SIZE + kernel_size - 1) * (BLOCK_SIZE + kernel_size - 1) + // Input tile
+         kernel_size * kernel_size) *                                       // Weights
         sizeof(float);
 
     // Launch kernel with dynamic shared memory
-    conv_forward_kernel<<<numBlocks, threadsPerBlock, shared_mem_size>>>(
-        d_input, d_weights, d_biases, d_conv_output_cache,
-        batch_size, in_channels, out_channels,
-        height, width, kernel_size, stride, padding,
-        conv_output_height, conv_output_width
-    );
-    CHECK_LAST_CUDA_ERROR();
+    for (int b = 0; b < batch_size; b++) {
+        conv_forward_kernel<<<numBlocks, threadsPerBlock, shared_mem_size>>>(
+            d_input + b * in_channels * height * width,
+            d_weights,
+            d_biases,
+            d_conv_output_cache + b * out_channels * conv_output_height * conv_output_width,
+            1,  // Process one batch at a time
+            in_channels,
+            out_channels,
+            height,
+            width,
+            kernel_size,
+            stride,
+            padding,
+            conv_output_height,
+            conv_output_width
+        );
+        CHECK_LAST_CUDA_ERROR();
+    }
     
     // 2. ReLU
     const int total_conv_elements = batch_size * out_channels * conv_output_height * conv_output_width;
