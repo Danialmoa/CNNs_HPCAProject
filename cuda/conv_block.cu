@@ -269,7 +269,9 @@ void ConvBlock::forward(const float* d_input, float* d_output,
     const int threads_per_block = 256;
     const int total_elements = batch_size * out_channels * conv_output_height * conv_output_width;
     const int num_blocks = (total_elements + threads_per_block - 1) / threads_per_block;
-    
+    std::cout << "num_blocks: " << num_blocks << std::endl;
+    std::cout << "threads_per_block: " << threads_per_block << std::endl;
+    std::cout << "total_elements: " << total_elements << std::endl;
     conv_forward_kernel<<<num_blocks, threads_per_block>>>(
         d_input, d_weights, d_biases, d_conv_output_cache,
         batch_size, in_channels, out_channels,
@@ -401,26 +403,12 @@ ConvBlock::~ConvBlock() {
 void ConvBlock::allocate_memory(int batch_size) {
     // Free existing memory if any
     free_memory();
-    std::cout << "Allocating memory for batch size: " << batch_size << std::endl;
-    std::cout << "--------------------------------" << std::endl;
-    std::cout << "input_height: " << input_height << std::endl;
-    std::cout << "input_width: " << input_width << std::endl;
-    std::cout << "kernel_size: " << kernel_size << std::endl;
-    std::cout << "stride: " << stride << std::endl;
-    std::cout << "padding: " << padding << std::endl;
-    std::cout << "pool_size: " << pool_size << std::endl;
-    std::cout << "pool_stride: " << pool_stride << std::endl;
 
     // Calculate output dimensions
     conv_output_height = (input_height + 2 * padding - kernel_size) / stride + 1;
     conv_output_width = (input_width + 2 * padding - kernel_size) / stride + 1;
     pool_output_height = (conv_output_height - pool_size) / pool_stride + 1;
     pool_output_width = (conv_output_width - pool_size) / pool_stride + 1;
-
-    std::cout << "conv_output_height: " << conv_output_height << std::endl;
-    std::cout << "conv_output_width: " << conv_output_width << std::endl;
-    std::cout << "pool_output_height: " << pool_output_height << std::endl;
-    std::cout << "pool_output_width: " << pool_output_width << std::endl;
 
     // Calculate sizes
     size_t conv_size = batch_size * out_channels * conv_output_height * conv_output_width;
