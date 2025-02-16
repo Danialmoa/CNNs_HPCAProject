@@ -13,10 +13,10 @@ private:
     int current_batch_size;
     float learning_rate;
     
-    // Dimensions
-    int input_height, input_width;
-    int conv_output_height, conv_output_width;
-    int pool_output_height, pool_output_width;
+    // Input dimensions
+    int input_height{0}, input_width{0};  // Initialize to 0
+    int conv_output_height{0}, conv_output_width{0};
+    int pool_output_height{0}, pool_output_width{0};
     
     // Device pointers
     float* d_weights;         // [out_channels, in_channels, kernel, kernel]
