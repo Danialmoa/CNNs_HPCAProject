@@ -114,6 +114,7 @@ int main() {
             const int conv2_output_size = batch_size * 64 * 8 * 8;
             const int conv3_output_size = batch_size * 128 * 4 * 4;
             const int fc_output_size = batch_size * 10;
+            const int fc_grad_size = batch_size * 128 * 4 * 4;
             
        
             // Allocate memory
@@ -127,7 +128,7 @@ int main() {
             CHECK_CUDA_ERROR(cudaMalloc(&d_grad_conv_1_output, conv1_output_size * sizeof(float)));
             CHECK_CUDA_ERROR(cudaMalloc(&d_grad_conv_2_output, conv2_output_size * sizeof(float)));
             CHECK_CUDA_ERROR(cudaMalloc(&d_grad_conv_3_output, conv3_output_size * sizeof(float)));
-            CHECK_CUDA_ERROR(cudaMalloc(&d_grad_fc_output, batch_size * 128 * 4 * 4 * sizeof(float)));
+            CHECK_CUDA_ERROR(cudaMalloc(&d_grad_fc_output, fc_grad_size * sizeof(float)));
             
             cudaStream_t stream;
             CHECK_CUDA_ERROR(cudaStreamCreate(&stream));
