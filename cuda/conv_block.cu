@@ -539,6 +539,7 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
     if (!streams_initialized) {
         throw std::runtime_error("Streams not initialized");
     }
+    // Debug dimensions
     std::cout << "\nBackward pass dimensions for ConvBlock:" << std::endl;
     std::cout << "batch_size: " << batch_size << std::endl;
     std::cout << "in_channels: " << in_channels << std::endl;
@@ -557,26 +558,33 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
     std::cout << "dim1 * dim2 * dim3: " << (dim1 * dim2 * dim3) << std::endl;
     std::cout << "dim1 * dim2 * dim3 * dim4: " << (dim1 * dim2 * dim3 * dim4) << std::endl;
 
-    size_t input_size = dim1 * dim2 * dim3 * dim4;
-    size_t total_bytes = input_size * sizeof(float);
+    // Calculate total size
+    size_t total_elements = dim1 * dim2 * dim3 * dim4;
+    size_t total_bytes = total_elements * sizeof(float);
 
-    std::cout << "Total input_size: " << input_size << std::endl;
+    std::cout << "Total elements: " << total_elements << std::endl;
     std::cout << "Total bytes to set: " << total_bytes << std::endl;
     std::cout << "d_grad_input pointer: " << d_grad_input << std::endl;
 
-    cudaError_t stream_status;
-    stream_status = cudaStreamQuery(stream1);
-    if (stream_status != cudaSuccess && stream_status != cudaErrorNotReady) {
-        throw std::runtime_error("Stream1 is invalid");
+    // Verify dimensions are valid
+    if (total_elements == 0) {
+        throw std::runtime_error("total_elements is 0 - dimensions not properly set");
     }
-    stream_status = cudaStreamQuery(stream2);
-    if (stream_status != cudaSuccess && stream_status != cudaErrorNotReady) {
-        throw std::runtime_error("Stream2 is invalid");
+    if (input_height == 0 || input_width == 0) {
+        throw std::runtime_error("input dimensions are 0");
     }
-    stream_status = cudaStreamQuery(stream3);
-    if (stream_status != cudaSuccess && stream_status != cudaErrorNotReady) {
-        throw std::runtime_error("Stream3 is invalid");
+
+    // Check for potential overflow
+    if (total_bytes / sizeof(float) != total_elements) {
+        throw std::runtime_error("Size calculation overflow detected");
     }
+
+    // Verify memory pointer
+    if (d_grad_input == nullptr) {
+        throw std::runtime_error("d_grad_input is null");
+    }
+
+    // Get device properties
     cudaDeviceProp prop;
     cudaGetDeviceProperties(&prop, 0);
     size_t total_memory = prop.totalGlobalMem;
