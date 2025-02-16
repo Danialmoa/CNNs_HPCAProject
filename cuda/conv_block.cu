@@ -226,10 +226,10 @@ ConvBlock::ConvBlock(int in_ch, int out_ch, int k_size,
     d_pool_indices = nullptr;
     d_weights = nullptr;
     d_biases = nullptr;
-    
+
+        
     init_weights_and_optimizers();
 }
-
 void ConvBlock::init_weights_and_optimizers() {
     // Calculate sizes
     size_t weights_size = out_channels * in_channels * kernel_size * kernel_size;
