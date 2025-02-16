@@ -59,4 +59,7 @@ public:
     void forward(const float* d_input, float* d_output, int batch_size, 
                 int height, int width);
     void backward(const float* d_grad_output, float* d_grad_input, int batch_size);
+
+    // Getter for conv output cache (for testing)
+    const float* get_conv_output_cache() const { return d_conv_output_cache; }
 };

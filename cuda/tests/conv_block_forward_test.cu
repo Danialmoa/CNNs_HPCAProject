@@ -3,7 +3,6 @@
 #include <vector>
 #include <iomanip>
 
-
 // Helper function to print 3D tensor (channel, height, width)
 void print_tensor(const float* data, int channels, int height, int width, const std::string& name) {
     std::cout << "\n" << name << " [" << channels << ", " << height << ", " << width << "]:\n";
@@ -36,11 +35,6 @@ int main() {
         const int pool_stride = 2;
         const float learning_rate = 0.01f;
 
-        // Create ConvBlock
-        ConvBlock conv_block(in_channels, out_channels, kernel_size, 
-                           stride, padding, pool_size, pool_stride, 
-                           learning_rate);
-
         // Calculate output dimensions
         const int conv_out_height = (height + 2 * padding - kernel_size) / stride + 1;
         const int conv_out_width = (width + 2 * padding - kernel_size) / stride + 1;
@@ -61,6 +55,11 @@ int main() {
             }
         }
 
+        // Create ConvBlock
+        ConvBlock conv_block(in_channels, out_channels, kernel_size, 
+                           stride, padding, pool_size, pool_stride, 
+                           learning_rate);
+
         // Allocate device memory for input and output
         float *d_input, *d_output;
         cudaMalloc(&d_input, h_input.size() * sizeof(float));
@@ -69,7 +68,7 @@ int main() {
         // Copy input to device
         cudaMemcpy(d_input, h_input.data(), h_input.size() * sizeof(float), cudaMemcpyHostToDevice);
 
-        // Print input tensor
+        // Print configuration
         std::cout << "\n=== Test Configuration ===";
         std::cout << "\nBatch size: " << batch_size;
         std::cout << "\nInput channels: " << in_channels;
@@ -90,13 +89,18 @@ int main() {
         // Forward pass
         conv_block.forward(d_input, d_output, batch_size, height, width);
 
-        // Get output
+        // Get intermediate results from conv_block's cache
+        std::vector<float> h_conv_output(batch_size * out_channels * conv_out_height * conv_out_width);
+        cudaMemcpy(h_conv_output.data(), conv_block.get_conv_output_cache(), 
+                  h_conv_output.size() * sizeof(float), cudaMemcpyDeviceToHost);
+        print_tensor(h_conv_output.data(), out_channels, conv_out_height, conv_out_width, 
+                    "After Convolution and ReLU (first batch)");
+
+        // Get final output
         std::vector<float> h_output(batch_size * out_channels * pool_out_height * pool_out_width);
         cudaMemcpy(h_output.data(), d_output, h_output.size() * sizeof(float), cudaMemcpyDeviceToHost);
-
-        // Print first batch of output
         print_tensor(h_output.data(), out_channels, pool_out_height, pool_out_width, 
-                    "Output (first batch)");
+                    "Final Output (first batch)");
 
         // Check for any CUDA errors
         cudaError_t err = cudaGetLastError();
@@ -116,4 +120,4 @@ int main() {
     }
 
     return 0;
-} 
+}
