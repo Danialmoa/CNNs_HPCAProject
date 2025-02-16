@@ -11,9 +11,12 @@ private:
     int current_batch_size;
     
     // Device pointers
-    float *d_weights, *d_biases;
-    float *d_cache, *d_conv_output_cache, *d_relu_output_cache;
-    int *d_pool_indices;
+    float* d_weights;
+    float* d_biases;
+    float* d_cache;                 // Input cache for backward pass
+    float* d_conv_output_cache;     // Convolution output cache
+    float* d_relu_cache;             // ReLU output cache
+    float* d_pool_indices;          // Pooling indices cache
     
     float learning_rate;
     

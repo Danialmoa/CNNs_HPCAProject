@@ -615,10 +615,10 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
     dim3 blockDimReLU(MAX_THREADS);
     
     relu_backward_kernel<<<gridDimReLU, blockDimReLU, 0, stream2>>>(
-        d_unpooled_grad,      // grad_output
-        d_relu_grad,          // grad_input
-        d_relu_output_cache,  // relu_cache (from forward pass)
-        conv_output_size      // total size
+        d_unpooled_grad,        // grad_output
+        d_relu_grad,            // grad_input
+        d_relu_output_cache,    // relu_cache (from forward pass)
+        conv_output_size        // total size
     );
     CHECK_LAST_CUDA_ERROR();
     cudaStreamSynchronize(stream2);
@@ -635,10 +635,10 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
     conv_backward_kernel<<<gridDim, blockDim, 0, stream1>>>(
         d_relu_grad,        // grad_output
         d_weights,          // weights
-        d_cache,           // input_cache
-        d_grad_input,      // grad_input
-        d_grad_weights,    // grad_weights
-        d_grad_biases,     // grad_biases
+        d_cache,            // input_cache
+        d_grad_input,       // grad_input
+        d_grad_weights,     // grad_weights
+        d_grad_biases,      // grad_biases
         batch_size,
         in_channels,
         out_channels,
