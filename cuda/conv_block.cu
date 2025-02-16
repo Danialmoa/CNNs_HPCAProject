@@ -5,10 +5,6 @@
 #include <iostream>
 
 
-#define TILE_SIZE 16
-#define BLOCK_SIZE 16
-#define MAX_THREADS 256
-
 // convolution forward kernel
 __global__ void conv_forward_kernel(
     const float* input,           // [batch, in_channels, height, width]
