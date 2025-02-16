@@ -3,6 +3,7 @@
 #include <vector>
 #include <iomanip>
 
+
 // Helper function to print 3D tensor (channel, height, width)
 void print_tensor(const float* data, int channels, int height, int width, const std::string& name) {
     std::cout << "\n" << name << " [" << channels << ", " << height << ", " << width << "]:\n";

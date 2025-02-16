@@ -270,16 +270,6 @@ void ConvBlock::forward(const float* d_input, float* d_output,
         out_channels * batch_size
     );
 
-    // Add validation before kernel launch
-    if (numBlocks.x == 0 || numBlocks.y == 0 || numBlocks.z == 0) {
-        throw std::runtime_error("Invalid block configuration");
-    }
-
-    // Validate dimensions
-    if (conv_output_width <= 0 || conv_output_height <= 0) {
-        throw std::runtime_error("Invalid output dimensions");
-    }
-
     // 1. Convolution with 3D grid
     conv_forward_kernel<<<numBlocks, threadsPerBlock>>>(
         d_input, d_weights, d_biases, d_conv_output_cache,
