@@ -547,7 +547,9 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
     std::cout << "in_channels: " << in_channels << std::endl;
     std::cout << "input_height: " << input_height << std::endl;
     std::cout << "input_width: " << input_width << std::endl;
-    
+    std::cout << "stream3: " << stream3 << std::endl;
+    std::cout << "d_grad_input: " << d_grad_input << std::endl;
+
     cudaStreamSynchronize(stream1);
     cudaStreamSynchronize(stream2);
     cudaStreamSynchronize(stream3);
@@ -556,7 +558,12 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
     size_t weight_size = out_channels * in_channels * kernel_size * kernel_size;
     size_t bias_size = out_channels;
     size_t input_size = batch_size * in_channels * input_height * input_width;
-     
+    
+
+    std::cout << "input_size: " << input_size << std::endl;
+    std::cout << "total bytes: " << input_size * sizeof(float) << std::endl;
+
+
     // Allocate temporary gradient buffers
     float *d_grad_weights, *d_grad_biases;
     CHECK_CUDA_ERROR(cudaMalloc(&d_grad_weights, weight_size * sizeof(float)));
