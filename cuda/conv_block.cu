@@ -274,6 +274,10 @@ void ConvBlock::forward(const float* d_input, float* d_output,
     CHECK_CUDA_ERROR(cudaMemcpy(d_cache, d_input, input_size * sizeof(float), 
                                cudaMemcpyDeviceToDevice));
     // 1. Convolution
+    std::cout << "batch_size: " << batch_size << std::endl;
+    std::cout << "out_channels: " << out_channels << std::endl;
+    std::cout << "conv_output_height: " << conv_output_height << std::endl;
+    std::cout << "conv_output_width: " << conv_output_width << std::endl;
     const int max_grid_dim = 65535; 
     dim3 conv_grid;
     conv_grid.x = batch_size;
