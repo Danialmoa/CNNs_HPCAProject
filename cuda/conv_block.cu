@@ -461,7 +461,11 @@ void ConvBlock::forward(const float* d_input, float* d_output, int batch_size, i
     input_height = height;
     input_width = width;
     current_batch_size = batch_size;
-    
+    std::cout << "Forward pass dimensions:" << std::endl;
+    std::cout << "Setting input_height: " << height << std::endl;
+    std::cout << "Setting input_width: " << width << std::endl;
+    std::cout << "Setting batch_size: " << batch_size << std::endl;
+
     // Allocate memory for this forward pass
     allocate_memory(batch_size);
 
@@ -542,10 +546,17 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
         init_streams();
     }
 
-
+    CHECK_CUDA_ERROR(cudaDeviceSynchronize());
     cudaStreamSynchronize(stream1);
     cudaStreamSynchronize(stream2);
     cudaStreamSynchronize(stream3);
+    std::cout << "Backward pass dimensions:" << std::endl;
+    std::cout << "batch_size: " << batch_size << std::endl;
+    std::cout << "in_channels: " << in_channels << std::endl;
+    std::cout << "input_height: " << input_height << std::endl;
+    std::cout << "input_width: " << input_width << std::endl;
+    std::cout << "d_grad_input pointer: " << d_grad_input << std::endl;
+    std::cout << "stream3: " << stream3 << std::endl;
 
     // Calculate sizes
     size_t weight_size = out_channels * in_channels * kernel_size * kernel_size;
