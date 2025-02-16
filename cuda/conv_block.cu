@@ -24,31 +24,31 @@ __global__ void conv_forward_kernel(
 ) {
     const int x = blockIdx.x * blockDim.x + threadIdx.x;
     const int y = blockIdx.y * blockDim.y + threadIdx.y;
-    const int n = blockIdx.z;
+    const int out_ch = blockIdx.z;
     
-    const int batch = n / out_channels;
-    const int out_ch = n % out_channels;
+    if (x >= out_width || y >= out_height || out_ch >= out_channels) return;
     
-    if (x >= out_width || y >= out_height || batch >= batch_size) return;
-    
-    float sum = biases[out_ch];
-    
-    for (int in_ch = 0; in_ch < in_channels; in_ch++) {
-        for (int kh = 0; kh < kernel_size; kh++) {
-            for (int kw = 0; kw < kernel_size; kw++) {
-                int h_in = y * stride - padding + kh;
-                int w_in = x * stride - padding + kw;
-                
-                if (h_in >= 0 && h_in < height && w_in >= 0 && w_in < width) {
-                    int input_idx = ((batch * in_channels + in_ch) * height + h_in) * width + w_in;
-                    int weight_idx = ((out_ch * in_channels + in_ch) * kernel_size + kh) * kernel_size + kw;
-                    sum += input[input_idx] * weights[weight_idx];
+    // Process all batches in this thread
+    for (int batch = 0; batch < batch_size; batch++) {
+        float sum = biases[out_ch];
+        
+        for (int in_ch = 0; in_ch < in_channels; in_ch++) {
+            for (int kh = 0; kh < kernel_size; kh++) {
+                for (int kw = 0; kw < kernel_size; kw++) {
+                    int h_in = y * stride - padding + kh;
+                    int w_in = x * stride - padding + kw;
+                    
+                    if (h_in >= 0 && h_in < height && w_in >= 0 && w_in < width) {
+                        int input_idx = ((batch * in_channels + in_ch) * height + h_in) * width + w_in;
+                        int weight_idx = ((out_ch * in_channels + in_ch) * kernel_size + kh) * kernel_size + kw;
+                        sum += input[input_idx] * weights[weight_idx];
+                    }
                 }
             }
         }
+        
+        output[((batch * out_channels + out_ch) * out_height + y) * out_width + x] = sum;
     }
-    
-    output[((batch * out_channels + out_ch) * out_height + y) * out_width + x] = sum;
 }
 
 // ReLU kernel with 1D indexing
@@ -286,7 +286,7 @@ void ConvBlock::forward(const float* d_input, float* d_output,
     dim3 numBlocks(
         (conv_output_width + threadsPerBlock.x - 1) / threadsPerBlock.x,
         (conv_output_height + threadsPerBlock.y - 1) / threadsPerBlock.y,
-        batch_size * out_channels
+        out_channels
     );
 
     // Add validation before kernel launch
