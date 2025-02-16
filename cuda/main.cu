@@ -93,7 +93,9 @@ int main() {
             // Create network layers
             std::cout << "Creating network..." << std::endl;
             ConvBlock conv1(3, 32, 3, 1, 1, 2, 2, learning_rate);  // input: 32x32x3, output: 16x16x32
-            FullyConnectedLayer fc(32 * 16 * 16, 10, learning_rate);  // input: 8192, output: 10
+            ConvBlock conv2(32, 64, 3, 1, 1, 2, 2, learning_rate);  // input: 16x16x32, output: 8x8x32
+            ConvBlock conv3(64, 128, 3, 1, 1, 2, 2, learning_rate);  // input: 8x8x32, output: 4x4x32
+            FullyConnectedLayer fc(128 * 4 * 4, 10, learning_rate);  // input: 8192, output: 10
 
             // Allocate GPU memory for data and intermediate results
             float *d_batch_images = nullptr;
@@ -107,9 +109,9 @@ int main() {
             // Allocate memory
             CHECK_CUDA_ERROR(cudaMalloc(&d_batch_images, batch_size * 3 * 32 * 32 * sizeof(float)));
             CHECK_CUDA_ERROR(cudaMalloc(&d_batch_labels, batch_size * 10 * sizeof(uint8_t)));
-            CHECK_CUDA_ERROR(cudaMalloc(&d_conv_output, batch_size * 32 * 16 * 16 * sizeof(float)));
+            CHECK_CUDA_ERROR(cudaMalloc(&d_conv_output, batch_size * 128 * 4 * 4 * sizeof(float)));
             CHECK_CUDA_ERROR(cudaMalloc(&d_fc_output, batch_size * 10 * sizeof(float)));
-            CHECK_CUDA_ERROR(cudaMalloc(&d_grad_conv_output, batch_size * 32 * 16 * 16 * sizeof(float)));
+            CHECK_CUDA_ERROR(cudaMalloc(&d_grad_conv_output, batch_size * 128 * 4 * 4 * sizeof(float)));
             CHECK_CUDA_ERROR(cudaMalloc(&d_grad_input, batch_size * 3 * 32 * 32 * sizeof(float)));
             
             cudaStream_t stream;
@@ -129,6 +131,8 @@ int main() {
 
                     // Forward pass
                     conv1.forward(d_batch_images, d_conv_output, batch_size, 32, 32);
+                    conv2.forward(d_conv_output, d_conv_output, batch_size, 16, 16);
+                    conv3.forward(d_conv_output, d_conv_output, batch_size, 8, 8);
                     fc.forward(d_conv_output, d_fc_output, batch_size);
 
                     // Compute loss and accuracy
@@ -140,7 +144,9 @@ int main() {
                     
                     // Backward pass
                     fc.backward(d_batch_labels, d_grad_conv_output, batch_size);
-                    conv1.backward(d_grad_conv_output, d_grad_input, batch_size);
+                    conv3.backward(d_grad_conv_output, d_grad_input, batch_size);
+                    conv2.backward(d_grad_input, d_grad_input, batch_size);
+                    conv1.backward(d_grad_input, d_grad_input, batch_size);
 
                 }
 
