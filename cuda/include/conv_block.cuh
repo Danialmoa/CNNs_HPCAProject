@@ -54,7 +54,14 @@ public:
     ConvBlock(int in_channels, int out_channels, int kernel_size, 
               int stride, int padding, int pool_size, int pool_stride, 
               float learning_rate);
-    ~ConvBlock();
+    ~ConvBlock(){
+        if (streams_initialized) {
+            cudaStreamDestroy(stream1);
+            cudaStreamDestroy(stream2);
+            cudaStreamDestroy(stream3);
+        }
+        free_memory();
+    };
 
     // Forward and backward functions
     void forward(const float* d_input, float* d_output, int batch_size, 
