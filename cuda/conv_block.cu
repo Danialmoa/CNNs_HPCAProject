@@ -339,16 +339,8 @@ ConvBlock::ConvBlock(int in_channels, int out_channels, int kernel_size,
       d_conv_output_cache(nullptr), d_relu_output_cache(nullptr),
       d_pool_indices(nullptr), current_batch_size(0),
       streams_initialized(false) {
-
-    std::cout << "Initializing ConvBlock with:" << std::endl;
-    std::cout << "in_channels: " << in_channels << std::endl;
-    std::cout << "out_channels: " << out_channels << std::endl;
-    std::cout << "kernel_size: " << kernel_size << std::endl;
-    std::cout << "stride: " << stride << std::endl;
-    std::cout << "padding: " << padding << std::endl;
-    std::cout << "pool_size: " << pool_size << std::endl;
-    std::cout << "pool_stride: " << pool_stride << std::endl;
-    std::cout << "learning_rate: " << learning_rate << std::endl;
+    
+    init_streams();
 
     // Validate parameters
     if (kernel_size <= 0 || stride <= 0 || padding < 0 || pool_size <= 0 || pool_stride <= 0) {
@@ -543,20 +535,13 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
         throw std::invalid_argument("Batch size mismatch between forward and backward passes");
     }
     if (!streams_initialized) {
-        init_streams();
+        throw std::runtime_error("Streams not initialized");
     }
 
     CHECK_CUDA_ERROR(cudaDeviceSynchronize());
     cudaStreamSynchronize(stream1);
     cudaStreamSynchronize(stream2);
     cudaStreamSynchronize(stream3);
-    std::cout << "Backward pass dimensions:" << std::endl;
-    std::cout << "batch_size: " << batch_size << std::endl;
-    std::cout << "in_channels: " << in_channels << std::endl;
-    std::cout << "input_height: " << input_height << std::endl;
-    std::cout << "input_width: " << input_width << std::endl;
-    std::cout << "d_grad_input pointer: " << d_grad_input << std::endl;
-    std::cout << "stream3: " << stream3 << std::endl;
 
     // Calculate sizes
     size_t weight_size = out_channels * in_channels * kernel_size * kernel_size;
