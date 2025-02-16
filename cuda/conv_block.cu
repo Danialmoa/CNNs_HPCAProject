@@ -409,10 +409,18 @@ void ConvBlock::allocate_memory(int batch_size) {
     conv_output_width = (input_width + 2 * padding - kernel_size) / stride + 1;
     pool_output_height = (conv_output_height - pool_size) / pool_stride + 1;
     pool_output_width = (conv_output_width - pool_size) / pool_stride + 1;
+
+    std::cout << "conv_output_height: " << conv_output_height << std::endl;
+    std::cout << "conv_output_width: " << conv_output_width << std::endl;
+    std::cout << "pool_output_height: " << pool_output_height << std::endl;
+    std::cout << "pool_output_width: " << pool_output_width << std::endl;
     
     // Calculate sizes
     size_t conv_size = batch_size * out_channels * conv_output_height * conv_output_width;
     size_t input_size = batch_size * in_channels * input_height * input_width;
+
+    std::cout << "conv_size: " << conv_size << std::endl;
+    std::cout << "input_size: " << input_size << std::endl;
     
     // Allocate memory
     CHECK_CUDA_ERROR(cudaMalloc(&d_conv_output_cache, conv_size * sizeof(float)));
