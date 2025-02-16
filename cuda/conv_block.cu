@@ -541,7 +541,13 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, int ba
     if (!streams_initialized) {
         init_streams();
     }
-
+    // Debug prints
+    std::cout << "Debug info:" << std::endl;
+    std::cout << "batch_size: " << batch_size << std::endl;
+    std::cout << "in_channels: " << in_channels << std::endl;
+    std::cout << "input_height: " << input_height << std::endl;
+    std::cout << "input_width: " << input_width << std::endl;
+    
     cudaStreamSynchronize(stream1);
     cudaStreamSynchronize(stream2);
     cudaStreamSynchronize(stream3);
