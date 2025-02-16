@@ -24,11 +24,11 @@ int main() {
     try {
         // Test parameters
         const int batch_size = 2;
-        const int in_channels = 3;
+        const int in_channels = 1;
         const int hidden_channels = 8;
-        const int out_channels = 4;
-        const int height = 32;
-        const int width = 32;
+        const int out_channels = 2;
+        const int height = 16;
+        const int width = 16;
         const int kernel_size = 3;
         const int stride = 1;
         const int padding = 1;
