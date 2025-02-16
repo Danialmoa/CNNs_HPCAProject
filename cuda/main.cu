@@ -125,10 +125,10 @@ int main() {
             CHECK_CUDA_ERROR(cudaMalloc(&d_conv_3_output, conv3_output_size * sizeof(float)));
             CHECK_CUDA_ERROR(cudaMalloc(&d_fc_output, fc_output_size * sizeof(float)));
 
-            // CHECK_CUDA_ERROR(cudaMalloc(&d_grad_conv_1_output, conv1_output_size * sizeof(float)));
-            // CHECK_CUDA_ERROR(cudaMalloc(&d_grad_conv_2_output, conv2_output_size * sizeof(float)));
-            // CHECK_CUDA_ERROR(cudaMalloc(&d_grad_conv_3_output, conv3_output_size * sizeof(float)));
-            // CHECK_CUDA_ERROR(cudaMalloc(&d_grad_fc_output, fc_grad_size * sizeof(float)));
+            CHECK_CUDA_ERROR(cudaMalloc(&d_grad_conv_1_output, conv1_output_size * sizeof(float)));
+            CHECK_CUDA_ERROR(cudaMalloc(&d_grad_conv_2_output, conv2_output_size * sizeof(float)));
+            CHECK_CUDA_ERROR(cudaMalloc(&d_grad_conv_3_output, conv3_output_size * sizeof(float)));
+            CHECK_CUDA_ERROR(cudaMalloc(&d_grad_fc_output, fc_grad_size * sizeof(float)));
             
             // Training loop
             std::cout << "Starting training..." << std::endl;
