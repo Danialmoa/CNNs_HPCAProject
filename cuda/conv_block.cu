@@ -22,28 +22,66 @@ __global__ void conv_forward_kernel(
     int out_height,
     int out_width
 ) {
-    const int x = blockIdx.x * blockDim.x + threadIdx.x;
-    const int y = blockIdx.y * blockDim.y + threadIdx.y;
+    extern __shared__ float shared_mem[];
+    
+    // Calculate thread and block indices
+    const int tx = threadIdx.x;
+    const int ty = threadIdx.y;
+    const int x = blockIdx.x * blockDim.x + tx;
+    const int y = blockIdx.y * blockDim.y + ty;
     const int out_ch = blockIdx.z % out_channels;
     const int batch = blockIdx.z / out_channels;
     
     if (x >= out_width || y >= out_height || out_ch >= out_channels || batch >= batch_size) return;
     
+    // Calculate shared memory layout
+    float* shared_input = shared_mem;
+    float* shared_weights = shared_input + (blockDim.y + kernel_size - 1) * (blockDim.x + kernel_size - 1);
+    
     float sum = biases[out_ch];
     
+    // Load input tiles into shared memory
     for (int in_ch = 0; in_ch < in_channels; in_ch++) {
-        for (int kh = 0; kh < kernel_size; kh++) {
-            for (int kw = 0; kw < kernel_size; kw++) {
-                int h_in = y * stride - padding + kh;
-                int w_in = x * stride - padding + kw;
+        // Load input patch into shared memory
+        const int tile_h = blockDim.y + kernel_size - 1;
+        const int tile_w = blockDim.x + kernel_size - 1;
+        
+        for (int i = ty; i < tile_h; i += blockDim.y) {
+            for (int j = tx; j < tile_w; j += blockDim.x) {
+                int h_in = blockIdx.y * blockDim.y + i - padding;
+                int w_in = blockIdx.x * blockDim.x + j - padding;
                 
+                float val = 0.0f;
                 if (h_in >= 0 && h_in < height && w_in >= 0 && w_in < width) {
-                    int input_idx = ((batch * in_channels + in_ch) * height + h_in) * width + w_in;
-                    int weight_idx = ((out_ch * in_channels + in_ch) * kernel_size + kh) * kernel_size + kw;
-                    sum += input[input_idx] * weights[weight_idx];
+                    val = input[((batch * in_channels + in_ch) * height + h_in) * width + w_in];
+                }
+                shared_input[i * tile_w + j] = val;
+            }
+        }
+        
+        // Load weights into shared memory
+        for (int i = ty; i < kernel_size; i += blockDim.y) {
+            for (int j = tx; j < kernel_size; j += blockDim.x) {
+                if (i < kernel_size && j < kernel_size) {
+                    shared_weights[i * kernel_size + j] = 
+                        weights[((out_ch * in_channels + in_ch) * kernel_size + i) * kernel_size + j];
                 }
             }
         }
+        
+        __syncthreads();
+        
+        // Compute convolution using shared memory
+        for (int kh = 0; kh < kernel_size; kh++) {
+            for (int kw = 0; kw < kernel_size; kw++) {
+                int h_offset = ty * stride + kh;
+                int w_offset = tx * stride + kw;
+                sum += shared_input[h_offset * (blockDim.x + kernel_size - 1) + w_offset] * 
+                       shared_weights[kh * kernel_size + kw];
+            }
+        }
+        
+        __syncthreads();
     }
     
     output[((batch * out_channels + out_ch) * out_height + y) * out_width + x] = sum;
@@ -295,15 +333,46 @@ void ConvBlock::forward(const float* d_input, float* d_output,
         (conv_output_height + threadsPerBlock.y - 1) / threadsPerBlock.y,
         out_channels * batch_size
     );
+    
+    // Calculate shared memory size
+    size_t shared_mem_size = (
+        // Input tile size
+        (threadsPerBlock.x + kernel_size - 1) * (threadsPerBlock.y + kernel_size - 1) +
+        // Weight tile size
+        kernel_size * kernel_size
+    ) * sizeof(float);
 
-    // 1. Convolution with 3D grid
-    conv_forward_kernel<<<numBlocks, threadsPerBlock>>>(
-        d_input, d_weights, d_biases, d_conv_output_cache,
-        batch_size, in_channels, out_channels,
-        height, width, kernel_size, stride, padding,
-        conv_output_height, conv_output_width
-    );
-    CHECK_LAST_CUDA_ERROR();
+    // Split the work across streams
+    int stream_batch_size = batch_size / 3;
+    for (int i = 0; i < 3; i++) {
+        int start_batch = i * stream_batch_size;
+        int current_batch_size = (i == 2) ? batch_size - start_batch : stream_batch_size;
+        
+        dim3 stream_blocks(
+            numBlocks.x,
+            numBlocks.y,
+            out_channels * current_batch_size
+        );
+        
+        cudaStream_t current_stream = (i == 0) ? stream1 : (i == 1) ? stream2 : stream3;
+        
+        conv_forward_kernel<<<stream_blocks, threadsPerBlock, shared_mem_size, current_stream>>>(
+            d_input + start_batch * in_channels * height * width,
+            d_weights,
+            d_biases,
+            d_conv_output_cache + start_batch * out_channels * conv_output_height * conv_output_width,
+            current_batch_size,
+            in_channels,
+            out_channels,
+            height,
+            width,
+            kernel_size,
+            stride,
+            padding,
+            conv_output_height,
+            conv_output_width
+        );
+    }
     
     // 2. ReLU
     const int total_conv_elements = batch_size * out_channels * conv_output_height * conv_output_width;
