@@ -107,7 +107,7 @@ int main() {
             float *d_grad_conv_1_output = nullptr;
             float *d_grad_conv_2_output = nullptr;
             float *d_grad_conv_3_output = nullptr;
-            float *d_grad_input = nullptr;
+            float *d_grad_fc_output = nullptr;
             
        
             // Allocate memory
@@ -120,7 +120,7 @@ int main() {
             CHECK_CUDA_ERROR(cudaMalloc(&d_grad_conv_1_output, batch_size * 32 * 16 * 16 * sizeof(float)));
             CHECK_CUDA_ERROR(cudaMalloc(&d_grad_conv_2_output, batch_size * 64 * 8 * 8 * sizeof(float)));
             CHECK_CUDA_ERROR(cudaMalloc(&d_grad_conv_3_output, batch_size * 128 * 4 * 4 * sizeof(float)));
-            CHECK_CUDA_ERROR(cudaMalloc(&d_grad_input, batch_size * 3 * 32 * 32 * sizeof(float)));
+            CHECK_CUDA_ERROR(cudaMalloc(&d_grad_fc_output, batch_size * 10 * sizeof(float)));
             
             cudaStream_t stream;
             CHECK_CUDA_ERROR(cudaStreamCreate(&stream));
@@ -174,10 +174,14 @@ int main() {
             // Free GPU memory
             cudaFree(d_batch_images);
             cudaFree(d_batch_labels);
-            cudaFree(d_conv_output);
+            cudaFree(d_conv_1_output);
+            cudaFree(d_conv_2_output);
+            cudaFree(d_conv_3_output);
             cudaFree(d_fc_output);
-            cudaFree(d_grad_conv_output);
-            cudaFree(d_grad_input);
+            cudaFree(d_grad_conv_1_output);
+            cudaFree(d_grad_conv_2_output);
+            cudaFree(d_grad_conv_3_output);
+            cudaFree(d_grad_fc_output);
         }
 
         // Reset device
