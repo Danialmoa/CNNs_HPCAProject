@@ -111,7 +111,9 @@ FullyConnectedLayer::FullyConnectedLayer(int in_features, int num_classes, float
     bias_optimizer(num_classes, learning_rate),
     current_batch_size(0),
     d_input_cache(nullptr),
-    d_output_cache(nullptr)
+    d_output_cache(nullptr),
+    d_weights(nullptr),
+    d_biases(nullptr)
     {
     
     // Initialize weights and biases on CPU
@@ -143,6 +145,14 @@ FullyConnectedLayer::FullyConnectedLayer(int in_features, int num_classes, float
 
 FullyConnectedLayer::~FullyConnectedLayer() {
     free_memory();
+    if (d_weights) {
+        CHECK_CUDA_ERROR(cudaFree(d_weights));
+        d_weights = nullptr;
+    }
+    if (d_biases) {
+        CHECK_CUDA_ERROR(cudaFree(d_biases));
+        d_biases = nullptr;
+    }
 }
 
 void FullyConnectedLayer::allocate_memory(int batch_size) {
@@ -174,8 +184,6 @@ void FullyConnectedLayer::allocate_memory(int batch_size) {
 }
 
 void FullyConnectedLayer::free_memory() {
-    if (d_weights) cudaFree(d_weights);
-    if (d_biases) cudaFree(d_biases);
     if (d_input_cache) cudaFree(d_input_cache);
     if (d_output_cache) cudaFree(d_output_cache);
 }
