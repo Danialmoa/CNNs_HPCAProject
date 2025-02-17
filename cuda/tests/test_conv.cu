@@ -61,3 +61,13 @@ void test_simple_convolution() {
     cudaFree(d_kernel);
     cudaFree(d_output);
 }
+
+int main() {
+    try {
+        test_simple_convolution();
+    } catch (const std::exception& e) {
+        std::cerr << "Error: " << e.what() << std::endl;
+        return 1;
+    }
+    return 0;
+}

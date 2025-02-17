@@ -130,13 +130,3 @@ int main() {
     }
     return 0;
 }
-
-int main() {
-    try {
-        test_simple_batchnorm();
-    } catch (const std::exception& e) {
-        std::cerr << "Error: " << e.what() << std::endl;
-        return 1;
-    }
-    return 0;
-}
