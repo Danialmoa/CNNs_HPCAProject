@@ -25,6 +25,17 @@ private:
     float* d_conv_output_cache; // Convolution output cache [batch, out_channels, conv_h, conv_w]
     int* d_pool_indices;      // Pooling indices cache [batch, out_channels, pool_h, pool_w]
     
+    // Batch normalization parameters
+    float* d_gamma;
+    float* d_beta;
+    float* d_running_mean;
+    float* d_running_var;
+    float* d_batch_mean;
+    float* d_batch_var;
+    float bn_epsilon;
+    float bn_momentum;
+    bool is_training;
+
     // CUDA streams for parallel execution
     cudaStream_t stream1, stream2, stream3;
     bool streams_initialized;
@@ -32,6 +43,8 @@ private:
     // Optimizers
     AdamOptimizer weights_optimizer;
     AdamOptimizer bias_optimizer;
+    AdamOptimizer gamma_optimizer;
+    AdamOptimizer beta_optimizer;
     
     // Helper functions
     void allocate_memory(int batch_size);
