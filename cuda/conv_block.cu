@@ -254,7 +254,7 @@ __global__ void conv_backward_kernel(
     }
 }
 
-// Add new kernel for batch normalization
+// Modify batch norm forward kernel for better parallelization
 __global__ void batch_norm_forward_kernel(
     float* input,           // [batch, channels, height, width]
     const float* gamma,     // [channels]
@@ -267,57 +267,74 @@ __global__ void batch_norm_forward_kernel(
     float epsilon, float momentum,
     bool is_training
 ) {
-    const int c = blockIdx.x;
+    const int tx = threadIdx.x;
+    const int ty = threadIdx.y;
+    const int bx = blockIdx.x;
+    const int by = blockIdx.y;
+    const int c = blockIdx.z;
+
     if (c >= channels) return;
 
-    float mean = 0.0f;
-    float m2 = 0.0f;
+    extern __shared__ float shared_mem[];
+    float* shared_sum = shared_mem;
+    float* shared_sq_sum = &shared_mem[blockDim.x * blockDim.y];
+
     const int spatial_size = height * width;
     const int N = batch_size * spatial_size;
-
-    // Step 1: Calculate mean
-    for (int b = 0; b < batch_size; b++) {
-        for (int h = 0; h < height; h++) {
-            for (int w = 0; w < width; w++) {
-                int idx = ((b * channels + c) * height + h) * width + w;
-                mean += input[idx];
-            }
-        }
-    }
-    mean /= N;
     
-    // Step 2: Calculate variance
+    // Initialize shared memory
+    if (tx == 0 && ty == 0) {
+        shared_sum[0] = 0.0f;
+        shared_sq_sum[0] = 0.0f;
+    }
+    __syncthreads();
+
+    // Step 1: Calculate mean and variance using parallel reduction
     for (int b = 0; b < batch_size; b++) {
-        for (int h = 0; h < height; h++) {
-            for (int w = 0; w < width; w++) {
-                int idx = ((b * channels + c) * height + h) * width + w;
-                float diff = input[idx] - mean;
-                m2 += diff * diff;
-            }
+        const int h = by * blockDim.y + ty;
+        const int w = bx * blockDim.x + tx;
+        
+        if (h < height && w < width) {
+            const int idx = ((b * channels + c) * height + h) * width + w;
+            const float val = input[idx];
+            atomicAdd(&shared_sum[0], val);
+            atomicAdd(&shared_sq_sum[0], val * val);
         }
     }
-    float var = m2 / N;
+    __syncthreads();
 
-    if (is_training) {
-        batch_mean[c] = mean;
-        batch_var[c] = var;
-        
-        // Update running statistics
-        running_mean[c] = momentum * running_mean[c] + (1.0f - momentum) * mean;
-        running_var[c] = momentum * running_var[c] + (1.0f - momentum) * var;
-    } else {
-        mean = running_mean[c];
-        var = running_var[c];
+    // Only one thread per block updates the channel statistics
+    if (tx == 0 && ty == 0) {
+        float mean = shared_sum[0] / N;
+        float mean_sq = shared_sq_sum[0] / N;
+        float var = mean_sq - mean * mean;
+
+        if (is_training) {
+            batch_mean[c] = mean;
+            batch_var[c] = var;
+            
+            // Update running statistics
+            running_mean[c] = momentum * running_mean[c] + (1.0f - momentum) * mean;
+            running_var[c] = momentum * running_var[c] + (1.0f - momentum) * var;
+        } else {
+            mean = running_mean[c];
+            var = running_var[c];
+        }
     }
+    __syncthreads();
 
-    // Step 3: Normalize and scale
-    float std = sqrtf(var + epsilon);
+    // Step 2: Normalize and scale
+    const float mean = is_training ? batch_mean[c] : running_mean[c];
+    const float var = is_training ? batch_var[c] : running_var[c];
+    const float std = sqrtf(var + epsilon);
+
     for (int b = 0; b < batch_size; b++) {
-        for (int h = 0; h < height; h++) {
-            for (int w = 0; w < width; w++) {
-                int idx = ((b * channels + c) * height + h) * width + w;
-                input[idx] = gamma[c] * (input[idx] - mean) / std + beta[c];
-            }
+        const int h = by * blockDim.y + ty;
+        const int w = bx * blockDim.x + tx;
+        
+        if (h < height && w < width) {
+            const int idx = ((b * channels + c) * height + h) * width + w;
+            input[idx] = gamma[c] * (input[idx] - mean) / std + beta[c];
         }
     }
 }
@@ -543,9 +560,18 @@ void ConvBlock::forward(const float* d_input, float* d_output,
     // Synchronize after convolution
     cudaDeviceSynchronize();
 
-    // After convolution but before ReLU, add batch normalization
-    batch_norm_forward_kernel<<<out_channels, 1>>>(
-        d_conv_output_cache,  // in-place normalization
+    // Launch batch norm with better parallelization
+    dim3 threads(16, 16);
+    dim3 blocks(
+        (conv_output_width + threads.x - 1) / threads.x,
+        (conv_output_height + threads.y - 1) / threads.y,
+        out_channels
+    );
+    
+    size_t shared_mem_size = 2 * threads.x * threads.y * sizeof(float);
+    
+    batch_norm_forward_kernel<<<blocks, threads, shared_mem_size>>>(
+        d_conv_output_cache,
         d_gamma,
         d_beta,
         d_running_mean,
