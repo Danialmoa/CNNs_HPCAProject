@@ -32,11 +32,11 @@ __global__ void conv_forward_kernel(
     float sum = biases ? biases[c_out] : 0.0f;
     
     // Iterate over input channels and kernel
+    #pragma unroll 4
     for (int c_in = 0; c_in < in_channels; c_in++) {
         for (int kh = 0; kh < kernel_size; kh++) {
-            const int in_h = start_h + kh;
-            
             for (int kw = 0; kw < kernel_size; kw++) {
+                const int in_h = start_h + kh;
                 const int in_w = start_w + kw;
                 
                 if (in_h >= 0 && in_h < height && in_w >= 0 && in_w < width) {

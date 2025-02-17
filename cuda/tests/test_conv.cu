@@ -16,6 +16,10 @@ void test_simple_convolution() {
     const int out_height = (height + 2 * padding - kernel_size) / stride + 1;
     const int out_width = (width + 2 * padding - kernel_size) / stride + 1;
     
+    // Print dimensions
+    std::cout << "Input dimensions: " << height << "x" << width << "\n";
+    std::cout << "Output dimensions: " << out_height << "x" << out_width << "\n";
+    
     // Input: [batch_size, in_channels, height, width]
     float input[16] = {
         1, 1, 1, 1,
@@ -42,6 +46,9 @@ void test_simple_convolution() {
     cudaMalloc(&d_input, batch_size * in_channels * height * width * sizeof(float));
     cudaMalloc(&d_kernel, out_channels * in_channels * kernel_size * kernel_size * sizeof(float));
     cudaMalloc(&d_output, batch_size * out_channels * out_height * out_width * sizeof(float));
+    
+    // Initialize output to zero
+    cudaMemset(d_output, 0, batch_size * out_channels * out_height * out_width * sizeof(float));
     
     // Copy data to device
     cudaMemcpy(d_input, input, batch_size * in_channels * height * width * sizeof(float), cudaMemcpyHostToDevice);
@@ -86,12 +93,28 @@ void test_simple_convolution() {
     cudaMemcpy(output, d_output, batch_size * out_channels * out_height * out_width * sizeof(float), cudaMemcpyDeviceToHost);
     
     // Print results
-    std::cout << "Convolution Test Results:\n";
+    std::cout << "\nInput Matrix:\n";
+    for (int h = 0; h < height; h++) {
+        for (int w = 0; w < width; w++) {
+            std::cout << input[h * width + w] << " ";
+        }
+        std::cout << "\n";
+    }
+    
+    std::cout << "\nKernel Matrix:\n";
+    for (int h = 0; h < kernel_size; h++) {
+        for (int w = 0; w < kernel_size; w++) {
+            std::cout << kernel[h * kernel_size + w] << " ";
+        }
+        std::cout << "\n";
+    }
+    
+    std::cout << "\nConvolution Results:\n";
     std::cout << "Expected:\tActual:\n";
     for (int h = 0; h < out_height; h++) {
         for (int w = 0; w < out_width; w++) {
-            std::cout << expected_output[h * out_width + w] << "\t\t" 
-                      << output[h * out_width + w] << "\n";
+            int idx = h * out_width + w;
+            std::cout << expected_output[idx] << "\t\t" << output[idx] << "\n";
         }
     }
     
