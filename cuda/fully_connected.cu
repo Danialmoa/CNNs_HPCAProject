@@ -115,7 +115,13 @@ FullyConnectedLayer::FullyConnectedLayer(int in_features, int num_classes, float
     d_weights(nullptr),
     d_biases(nullptr)
     {
-    
+    // Log initial memory state
+    size_t free_memory, total_memory;
+    cudaMemGetInfo(&free_memory, &total_memory);
+    std::cout << "\nInitializing FC Layer:" << std::endl;
+    std::cout << "Available memory at start: " << (free_memory / 1024.0 / 1024.0) << " MB" << std::endl;
+
+
     // Initialize weights and biases on CPU
     std::vector<float> h_weights(num_classes * in_features);
     std::vector<float> h_biases(num_classes);
@@ -141,6 +147,8 @@ FullyConnectedLayer::FullyConnectedLayer(int in_features, int num_classes, float
     CHECK_CUDA_ERROR(cudaMemcpy(d_biases, h_biases.data(), 
                                h_biases.size() * sizeof(float), 
                                cudaMemcpyHostToDevice));
+    cudaMemGetInfo(&free_memory, &total_memory);
+    std::cout << "Available memory after initialization: " << (free_memory / 1024.0 / 1024.0) << " MB" << std::endl;
 }
 
 FullyConnectedLayer::~FullyConnectedLayer() {
