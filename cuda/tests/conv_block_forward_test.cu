@@ -5,6 +5,7 @@
 #include <numeric>
 #include <random>
 #include <cmath>
+#include <algorithm>  // Add this for min_element and max_element
 
 // Add function declarations at the top of the file
 float calculate_mean(const float* data, int size);
