@@ -141,18 +141,31 @@ int main() {
         print_tensor_stats(h_conv1_pre_bn.data(), hidden_channels, conv1_out_height, conv1_out_width, 
                           "Conv1 Pre-BN Output");
 
-        // Check batch norm parameters
+        // Add synchronization point
+        cudaDeviceSynchronize();
+        CHECK_CUDA_ERROR(cudaGetLastError());
+
+        // Check batch norm parameters with error checking
         std::vector<float> h_gamma(hidden_channels), h_beta(hidden_channels);
         std::vector<float> h_running_mean(hidden_channels), h_running_var(hidden_channels);
-        cudaMemcpy(h_gamma.data(), conv1.get_gamma(), hidden_channels * sizeof(float), 
-                  cudaMemcpyDeviceToHost);
-        cudaMemcpy(h_beta.data(), conv1.get_beta(), hidden_channels * sizeof(float), 
-                  cudaMemcpyDeviceToHost);
-        cudaMemcpy(h_running_mean.data(), conv1.get_running_mean(), 
-                  hidden_channels * sizeof(float), cudaMemcpyDeviceToHost);
-        cudaMemcpy(h_running_var.data(), conv1.get_running_var(), 
-                  hidden_channels * sizeof(float), cudaMemcpyDeviceToHost);
+        
+        CHECK_CUDA_ERROR(cudaMemcpy(h_gamma.data(), conv1.get_gamma(), 
+                                   hidden_channels * sizeof(float), cudaMemcpyDeviceToHost));
+        CHECK_CUDA_ERROR(cudaMemcpy(h_beta.data(), conv1.get_beta(), 
+                                   hidden_channels * sizeof(float), cudaMemcpyDeviceToHost));
+        CHECK_CUDA_ERROR(cudaMemcpy(h_running_mean.data(), conv1.get_running_mean(), 
+                                   hidden_channels * sizeof(float), cudaMemcpyDeviceToHost));
+        CHECK_CUDA_ERROR(cudaMemcpy(h_running_var.data(), conv1.get_running_var(), 
+                                   hidden_channels * sizeof(float), cudaMemcpyDeviceToHost));
 
+        // Add debug prints
+        std::cout << "\n=== Debug Information ===\n";
+        std::cout << "Batch size: " << batch_size << std::endl;
+        std::cout << "Hidden channels: " << hidden_channels << std::endl;
+        std::cout << "Conv1 output dimensions: " << conv1_out_height << "x" << conv1_out_width << std::endl;
+        std::cout << "Pool1 output dimensions: " << pool1_out_height << "x" << pool1_out_width << std::endl;
+
+        // Print intermediate values
         std::cout << "\n=== Batch Norm Parameters ===\n";
         std::cout << "Gamma (first few): ";
         for (int i = 0; i < std::min(5, hidden_channels); i++) {
@@ -172,13 +185,32 @@ int main() {
         }
         std::cout << "\n";
 
-        // Forward pass
+        // Add synchronization point
+        cudaDeviceSynchronize();
+        CHECK_CUDA_ERROR(cudaGetLastError());
+
+        // Forward pass for conv2
         conv2.forward(d_conv1_output, d_final_output, batch_size, pool1_out_height, pool1_out_width);
 
-        // Get intermediate output
+        // Add synchronization point
+        cudaDeviceSynchronize();
+        CHECK_CUDA_ERROR(cudaGetLastError());
+
+        // Get intermediate output with error checking
         std::vector<float> h_conv1_output(batch_size * hidden_channels * pool1_out_height * pool1_out_width);
-        cudaMemcpy(h_conv1_output.data(), d_conv1_output, h_conv1_output.size() * sizeof(float), 
-                  cudaMemcpyDeviceToHost);
+        CHECK_CUDA_ERROR(cudaMemcpy(h_conv1_output.data(), d_conv1_output, 
+                                   h_conv1_output.size() * sizeof(float), cudaMemcpyDeviceToHost));
+
+        // Print detailed statistics for conv1 output
+        float conv1_mean = 0.0f, conv1_var = 0.0f;
+        calculate_stats(h_conv1_output.data(), h_conv1_output.size(), conv1_mean, conv1_var);
+        
+        std::cout << "\n=== Detailed Conv1 Output Statistics ===\n";
+        std::cout << "Size: " << h_conv1_output.size() << std::endl;
+        std::cout << "Mean: " << conv1_mean << std::endl;
+        std::cout << "Variance: " << conv1_var << std::endl;
+        std::cout << "Min: " << *std::min_element(h_conv1_output.begin(), h_conv1_output.end()) << std::endl;
+        std::cout << "Max: " << *std::max_element(h_conv1_output.begin(), h_conv1_output.end()) << std::endl;
 
         // Get final output
         std::vector<float> h_final_output(batch_size * out_channels * pool2_out_height * pool2_out_width);
@@ -193,12 +225,12 @@ int main() {
 
         // Verify batch normalization
         // After batch norm, we expect mean close to 0 and variance close to 1
-        float conv1_mean, conv1_var;
-        calculate_stats(h_conv1_output.data(), h_conv1_output.size(), conv1_mean, conv1_var);
+        float conv1_mean_after, conv1_var_after;
+        calculate_stats(h_conv1_output.data(), h_conv1_output.size(), conv1_mean_after, conv1_var_after);
         
         std::cout << "\nBatch Normalization Verification:";
-        std::cout << "\nConv1 Output - Mean should be close to 0: " << conv1_mean;
-        std::cout << "\nConv1 Output - Variance should be close to 1: " << conv1_var;
+        std::cout << "\nConv1 Output - Mean should be close to 0: " << conv1_mean_after;
+        std::cout << "\nConv1 Output - Variance should be close to 1: " << conv1_var_after;
 
         // Test backward pass
         std::vector<float> h_grad_output(h_final_output.size(), 1.0f);  // Simple gradient
@@ -229,13 +261,17 @@ int main() {
         print_tensor_stats(h_grad_weights.data(), hidden_channels, kernel_size, kernel_size, 
                           "Conv1 Weight Gradients");
 
-        // Cleanup
+        // Cleanup with error checking
         delete[] h_input;
-        cudaFree(d_input);
-        cudaFree(d_conv1_output);
-        cudaFree(d_final_output);
-        cudaFree(d_grad_output);
-        cudaFree(d_grad_input);
+        CHECK_CUDA_ERROR(cudaFree(d_input));
+        CHECK_CUDA_ERROR(cudaFree(d_conv1_output));
+        CHECK_CUDA_ERROR(cudaFree(d_final_output));
+        CHECK_CUDA_ERROR(cudaFree(d_grad_output));
+        CHECK_CUDA_ERROR(cudaFree(d_grad_input));
+
+        // Final synchronization
+        cudaDeviceSynchronize();
+        CHECK_CUDA_ERROR(cudaGetLastError());
 
         std::cout << "\nTest completed successfully!" << std::endl;
         return 0;
