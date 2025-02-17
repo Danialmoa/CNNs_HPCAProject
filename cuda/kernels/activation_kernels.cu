@@ -1,4 +1,4 @@
-#include "include/kernels/activation_kernels.cuh"
+#include "../include/kernels/activation_kernels.cuh"
 
 __global__ void relu_kernel(float* data, int size) {
     const int idx = blockIdx.x * blockDim.x + threadIdx.x;
