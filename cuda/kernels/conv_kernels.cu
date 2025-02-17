@@ -1,10 +1,10 @@
 #include "../include/kernels/conv_kernels.cuh"
 
 __global__ void conv_forward_kernel(
-    const float* input,
-    const float* weights,
-    const float* biases,
-    float* output,
+    const float* input,           // [N, C_in, H, W]
+    const float* weights,         // [C_out, C_in, K, K]
+    const float* biases,          // [C_out]
+    float* output,                // [N, C_out, H_out, W_out]
     int batch_size,
     int in_channels,
     int out_channels,
@@ -16,40 +16,45 @@ __global__ void conv_forward_kernel(
     int out_height,
     int out_width
 ) {
-    // Calculate output position
+    // Get output position
     const int x = blockIdx.x * blockDim.x + threadIdx.x;
     const int y = blockIdx.y * blockDim.y + threadIdx.y;
+    const int n = blockIdx.z / out_channels;  // batch index
+    const int c_out = blockIdx.z % out_channels;  // output channel index
     
-    if (x >= out_width || y >= out_height) return;
+    if (x >= out_width || y >= out_height || n >= batch_size) return;
     
-    // Initialize output value
-    float sum = 0.0f;
+    // Compute input window boundaries
+    const int start_h = y * stride - padding;
+    const int start_w = x * stride - padding;
     
-    // Center position of the kernel over the input
-    const int center_h = y * stride - padding;
-    const int center_w = x * stride - padding;
+    // Initialize accumulator
+    float sum = biases ? biases[c_out] : 0.0f;
     
-    // Half size of kernel (for centering)
-    const int half_k = kernel_size / 2;
-    
-    // Compute convolution
-    for (int kh = 0; kh < kernel_size; kh++) {
-        int in_h = center_h + kh;
-        
-        for (int kw = 0; kw < kernel_size; kw++) {
-            int in_w = center_w + kw;
+    // Iterate over input channels and kernel
+    for (int c_in = 0; c_in < in_channels; c_in++) {
+        for (int kh = 0; kh < kernel_size; kh++) {
+            const int in_h = start_h + kh;
             
-            if (in_h >= 0 && in_h < height && in_w >= 0 && in_w < width) {
-                float in_val = input[in_h * width + in_w];
-                // Sobel kernel doesn't need flipping because it's symmetric
-                float weight_val = weights[kh * kernel_size + kw];
-                sum += in_val * weight_val;
+            for (int kw = 0; kw < kernel_size; kw++) {
+                const int in_w = start_w + kw;
+                
+                if (in_h >= 0 && in_h < height && in_w >= 0 && in_w < width) {
+                    // Input index: [n, c_in, h, w]
+                    const int in_idx = ((n * in_channels + c_in) * height + in_h) * width + in_w;
+                    
+                    // Weight index: [c_out, c_in, kh, kw]
+                    const int w_idx = ((c_out * in_channels + c_in) * kernel_size + kh) * kernel_size + kw;
+                    
+                    sum += input[in_idx] * weights[w_idx];
+                }
             }
         }
     }
     
-    // Write output
-    output[y * out_width + x] = sum;
+    // Output index: [n, c_out, h, w]
+    const int out_idx = ((n * out_channels + c_out) * out_height + y) * out_width + x;
+    output[out_idx] = sum;
 }
 
 __global__ void conv_backward_kernel(
