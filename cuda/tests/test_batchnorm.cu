@@ -6,9 +6,9 @@ void test_simple_batchnorm() {
     float input[16] = {
         // Channel 1
         1.0f, 2.0f, 3.0f, 4.0f,    // First batch
-        1.0f, 2.0f, 3.0f, 4.0f,    // Second batch
+        5.0f, 6.0f, 7.0f, 8.0f,    // Second batch
         // Channel 2
-        5.0f, 6.0f, 7.0f, 8.0f,    // First batch
+        1.0f, 2.0f, 3.0f, 4.0f,    // First batch
         5.0f, 6.0f, 7.0f, 8.0f     // Second batch
     };
     
