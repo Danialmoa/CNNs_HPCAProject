@@ -1,6 +1,7 @@
 #pragma once
 #include <cuda_runtime.h>
 #include "adam_optimizer.cuh"
+#include "cuda_utils.cuh"
 
 class ConvBlock {
 private:
@@ -66,4 +67,8 @@ public:
     const float* get_biases() const { return d_biases; }
     const float* get_gamma() const { return d_gamma; }
     const float* get_beta() const { return d_beta; }
+
+    // Training mode control
+    void set_training(bool training) { is_training = training; }
+    bool get_training() const { return is_training; }
 };

@@ -1,5 +1,4 @@
 #include "../include/conv_block.cuh"
-
 #include <iostream>
 #include <vector>
 #include <random>
