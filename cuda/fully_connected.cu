@@ -111,8 +111,7 @@ FullyConnectedLayer::FullyConnectedLayer(int in_features, int num_classes, float
     bias_optimizer(num_classes, learning_rate),
     current_batch_size(0),
     d_input_cache(nullptr),
-    d_output_cache(nullptr),
-    streams_initialized(false)
+    d_output_cache(nullptr)
     {
     
     // Initialize weights and biases on CPU
@@ -143,11 +142,6 @@ FullyConnectedLayer::FullyConnectedLayer(int in_features, int num_classes, float
 }
 
 FullyConnectedLayer::~FullyConnectedLayer() {
-    if (streams_initialized) {
-        cudaStreamDestroy(stream1);
-        cudaStreamDestroy(stream2);
-        cudaStreamDestroy(stream3);
-    }
     free_memory();
 }
 
@@ -207,13 +201,6 @@ void FullyConnectedLayer::forward(const float* d_input, float* d_output, int bat
 }
 
 void FullyConnectedLayer::backward(const uint8_t* d_labels, float* d_grad_input, int batch_size) {
-    if (!streams_initialized) {
-        init_streams();
-    }
-    cudaStreamSynchronize(stream1);
-    cudaStreamSynchronize(stream2);
-    cudaStreamSynchronize(stream3);
-
     size_t input_grad_size = batch_size * in_features;
     size_t weight_size = num_classes * in_features;
     size_t bias_size = num_classes;
@@ -224,17 +211,13 @@ void FullyConnectedLayer::backward(const uint8_t* d_labels, float* d_grad_input,
     CHECK_CUDA_ERROR(cudaMalloc(&d_grad_biases, bias_size * sizeof(float)));
     
     // Zero out gradients
-    CHECK_CUDA_ERROR(cudaMemsetAsync(d_grad_weights, 0, weight_size * sizeof(float), stream1));
-    CHECK_CUDA_ERROR(cudaMemsetAsync(d_grad_biases, 0, bias_size * sizeof(float), stream2));
-    CHECK_CUDA_ERROR(cudaMemsetAsync(d_grad_input, 0, input_grad_size * sizeof(float), stream3));
-
-    cudaStreamSynchronize(stream1);
-    cudaStreamSynchronize(stream2);
-    cudaStreamSynchronize(stream3);
+    CHECK_CUDA_ERROR(cudaMemset(d_grad_weights, 0, weight_size * sizeof(float)));
+    CHECK_CUDA_ERROR(cudaMemset(d_grad_biases, 0, bias_size * sizeof(float)));
+    CHECK_CUDA_ERROR(cudaMemset(d_grad_input, 0, input_grad_size * sizeof(float)));
 
     // Compute gradients
     dim3 grid(batch_size, num_classes);
-    backward_kernel<<<grid, 1, 0, stream1>>>(
+    backward_kernel<<<grid, 1>>>(
         d_output_cache, d_labels,
         d_input_cache, d_weights,
         d_grad_input, d_grad_weights, d_grad_biases,

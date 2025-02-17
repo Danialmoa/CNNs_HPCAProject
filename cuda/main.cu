@@ -113,6 +113,7 @@ int main() {
             const int conv1_output_size = batch_size * 32 * 16 * 16;
             const int conv2_output_size = batch_size * 64 * 8 * 8;
             const int conv3_output_size = batch_size * 128 * 4 * 4;
+            
             const int fc_output_size = batch_size * 10;
             const int fc_grad_size = batch_size * 128 * 4 * 4;
             
@@ -120,15 +121,17 @@ int main() {
             // Allocate memory
             CHECK_CUDA_ERROR(cudaMalloc(&d_batch_images, batch_size * 3 * 32 * 32 * sizeof(float)));
             CHECK_CUDA_ERROR(cudaMalloc(&d_batch_labels, batch_size * 10 * sizeof(uint8_t)));
+            
+            CHECK_CUDA_ERROR(cudaMalloc(&d_fc_output, fc_output_size * sizeof(float)));
+            CHECK_CUDA_ERROR(cudaMalloc(&d_grad_fc_output, fc_grad_size * sizeof(float)));
+
             CHECK_CUDA_ERROR(cudaMalloc(&d_conv_1_output, conv1_output_size * sizeof(float)));
             CHECK_CUDA_ERROR(cudaMalloc(&d_conv_2_output, conv2_output_size * sizeof(float)));
             CHECK_CUDA_ERROR(cudaMalloc(&d_conv_3_output, conv3_output_size * sizeof(float)));
-            CHECK_CUDA_ERROR(cudaMalloc(&d_fc_output, fc_output_size * sizeof(float)));
 
             CHECK_CUDA_ERROR(cudaMalloc(&d_grad_conv_1_output, conv1_output_size * sizeof(float)));
             CHECK_CUDA_ERROR(cudaMalloc(&d_grad_conv_2_output, conv2_output_size * sizeof(float)));
             CHECK_CUDA_ERROR(cudaMalloc(&d_grad_conv_3_output, conv3_output_size * sizeof(float)));
-            CHECK_CUDA_ERROR(cudaMalloc(&d_grad_fc_output, fc_grad_size * sizeof(float)));
             
             // Training loop
             std::cout << "Starting training..." << std::endl;
