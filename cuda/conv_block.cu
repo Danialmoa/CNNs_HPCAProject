@@ -267,7 +267,7 @@ __global__ void batch_norm_forward_kernel(
     float epsilon, float momentum,
     bool is_training
 ) {
-    const int c = blockIdx.x;  // One block per channel
+    const int c = blockIdx.x;
     if (c >= channels) return;
 
     const int tid = threadIdx.x;
@@ -279,15 +279,17 @@ __global__ void batch_norm_forward_kernel(
     float* shared_sum = shared_mem;
     float* shared_sq_sum = &shared_mem[block_size];
 
-    // Initialize thread accumulator
+    // Initialize accumulators
     float sum = 0.0f;
     float sq_sum = 0.0f;
 
-    // Each thread processes multiple elements
+    // First pass: compute sums
     for (int i = tid; i < N; i += block_size) {
         const int b = i / spatial_size;
         const int spatial_idx = i % spatial_size;
-        const int idx = ((b * channels + c) * height * width) + spatial_idx;
+        const int h = spatial_idx / width;
+        const int w = spatial_idx % width;
+        const int idx = ((b * channels + c) * height + h) * width + w;
         float val = input[idx];
         sum += val;
         sq_sum += val * val;
@@ -298,7 +300,7 @@ __global__ void batch_norm_forward_kernel(
     shared_sq_sum[tid] = sq_sum;
     __syncthreads();
 
-    // Parallel reduction in shared memory
+    // Reduction
     for (int stride = block_size/2; stride > 0; stride >>= 1) {
         if (tid < stride) {
             shared_sum[tid] += shared_sum[tid + stride];
@@ -307,33 +309,32 @@ __global__ void batch_norm_forward_kernel(
         __syncthreads();
     }
 
-    // Thread 0 computes final statistics
+    float mean, var;
     if (tid == 0) {
-        float mean = shared_sum[0] / N;
+        mean = shared_sum[0] / N;
         float mean_sq = shared_sq_sum[0] / N;
-        float var = mean_sq - (mean * mean);
+        var = mean_sq - (mean * mean);
         
         if (is_training) {
             batch_mean[c] = mean;
             batch_var[c] = var;
-            
-            // Update running statistics
             running_mean[c] = momentum * running_mean[c] + (1.0f - momentum) * mean;
             running_var[c] = momentum * running_var[c] + (1.0f - momentum) * var;
         }
     }
     __syncthreads();
 
-    // Normalize and scale
-    const float mean = is_training ? batch_mean[c] : running_mean[c];
-    const float var = is_training ? batch_var[c] : running_var[c];
+    // Second pass: normalize
+    mean = is_training ? batch_mean[c] : running_mean[c];
+    var = is_training ? batch_var[c] : running_var[c];
     const float inv_std = rsqrtf(var + epsilon);
 
-    // Each thread processes multiple elements
     for (int i = tid; i < N; i += block_size) {
         const int b = i / spatial_size;
         const int spatial_idx = i % spatial_size;
-        const int idx = ((b * channels + c) * height * width) + spatial_idx;
+        const int h = spatial_idx / width;
+        const int w = spatial_idx % width;
+        const int idx = ((b * channels + c) * height + h) * width + w;
         float normalized = (input[idx] - mean) * inv_std;
         input[idx] = gamma[c] * normalized + beta[c];
     }
