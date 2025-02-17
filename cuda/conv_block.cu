@@ -36,15 +36,6 @@ void ConvBlock::forward(const float* d_input, float* d_output,
     pool_output_height = (conv_output_height - pool_size) / pool_stride + 1;
     pool_output_width = (conv_output_width - pool_size) / pool_stride + 1;
 
-    // Log layer info
-    std::cout << "\nConvBlock memory allocation:" << std::endl;
-    std::cout << "Input shape: " << batch_size << "x" << in_channels << "x" << height << "x" << width << std::endl;
-    std::cout << "Conv output shape: " << batch_size << "x" << out_channels << "x" 
-              << conv_output_height << "x" << conv_output_width << std::endl;
-    std::cout << "Pool output shape: " << batch_size << "x" << out_channels << "x" 
-              << pool_output_height << "x" << pool_output_width << std::endl;
-
-
     // Allocate memory if needed
     allocate_memory(batch_size);
 

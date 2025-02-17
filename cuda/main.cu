@@ -150,21 +150,12 @@ int main() {
                     // Get batch data
                     dataset.get_batch_data(d_batch_images, d_batch_labels, batch, batch_size);
                     size_t free_memory, total_memory;
-                    cudaMemGetInfo(&free_memory, &total_memory);
-                    std::cout << "Available GPU memory: " << free_memory / 1024 / 1024 << "MB" << std::endl;
                     // Forward pass
                     conv1.forward(d_batch_images, d_conv_1_output, batch_size, 32, 32);
-                    cudaMemGetInfo(&free_memory, &total_memory);
-                    std::cout << "Available GPU memory after conv1: " << free_memory / 1024 / 1024 << "MB" << std::endl;
                     conv2.forward(d_conv_1_output, d_conv_2_output, batch_size, 16, 16);
-                    cudaMemGetInfo(&free_memory, &total_memory);
-                    std::cout << "Available GPU memory after conv2: " << free_memory / 1024 / 1024 << "MB" << std::endl;
                     conv3.forward(d_conv_2_output, d_conv_3_output, batch_size, 8, 8);
-                    cudaMemGetInfo(&free_memory, &total_memory);
-                    std::cout << "Available GPU memory after conv3: " << free_memory / 1024 / 1024 << "MB" << std::endl;
                     fc.forward(d_conv_3_output, d_fc_output, batch_size);
-                    cudaMemGetInfo(&free_memory, &total_memory);
-                    std::cout << "Available GPU memory after fc: " << free_memory / 1024 / 1024 << "MB" << std::endl;
+
                     // Compute loss and accuracy
                     float batch_loss = fc.compute_loss(d_batch_labels, batch_size);
                     float batch_accuracy = calculate_accuracy(d_fc_output, d_batch_labels, batch_size);

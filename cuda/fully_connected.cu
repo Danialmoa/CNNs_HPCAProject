@@ -114,13 +114,6 @@ FullyConnectedLayer::FullyConnectedLayer(int in_features, int num_classes, float
     d_output_cache(nullptr),
     d_weights(nullptr),
     d_biases(nullptr)
-    {
-    // Log initial memory state
-    size_t free_memory, total_memory;
-    cudaMemGetInfo(&free_memory, &total_memory);
-    std::cout << "\nInitializing FC Layer:" << std::endl;
-    std::cout << "Available memory at start: " << (free_memory / 1024.0 / 1024.0) << " MB" << std::endl;
-
 
     // Initialize weights and biases on CPU
     std::vector<float> h_weights(num_classes * in_features);
@@ -168,21 +161,6 @@ void FullyConnectedLayer::allocate_memory(int batch_size) {
             // Free existing memory
             if (d_input_cache) cudaFree(d_input_cache);
             if (d_output_cache) cudaFree(d_output_cache);
-
-            // Log memory requirements
-            size_t input_cache_size = batch_size * in_features * sizeof(float);
-            size_t output_cache_size = batch_size * num_classes * sizeof(float);
-        
-            size_t free_memory, total_memory;
-            cudaMemGetInfo(&free_memory, &total_memory);
-            std::cout << "Allocating FC layer caches:" << std::endl;
-            std::cout << "Batch size: " << batch_size << std::endl;
-            std::cout << "In features: " << in_features << std::endl;
-            std::cout << "Num classes: " << num_classes << std::endl;
-            std::cout << "Input cache size: " << (input_cache_size / 1024.0 / 1024.0) << " MB" << std::endl;
-            std::cout << "Output cache size: " << (output_cache_size / 1024.0 / 1024.0) << " MB" << std::endl;
-            std::cout << "Available GPU memory: " << (free_memory / 1024.0 / 1024.0) << " MB" << std::endl;
-            
                 
             // Allocate new memory
             CHECK_CUDA_ERROR(cudaMalloc(&d_input_cache, 
