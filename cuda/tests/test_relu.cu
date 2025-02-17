@@ -28,3 +28,11 @@ void test_simple_relu() {
     
     cudaFree(d_data);
 }
+
+int main() {
+    try {
+        test_simple_relu();
+    } catch (const std::exception& e) {
+        std::cerr << "Error: " << e.what() << std::endl;
+        return 1;
+
