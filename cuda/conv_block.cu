@@ -419,6 +419,11 @@ void ConvBlock::forward(const float* d_input, float* d_output,
 // Backward pass implementation
 void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, 
                         int batch_size, int height, int width) {
+    // Add gradient norm monitoring
+    float* d_grad_norm;
+    CHECK_CUDA_ERROR(cudaMalloc(&d_grad_norm, sizeof(float)));
+    CHECK_CUDA_ERROR(cudaMemset(d_grad_norm, 0, sizeof(float)));
+
     // Set dimensions if not already set
     input_height = height;
     input_width = width;
@@ -517,6 +522,17 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input,
     cudaStreamSynchronize(stream1);
     cudaStreamSynchronize(stream2);
     cudaStreamSynchronize(stream3);
+
+    // Monitor gradient norm
+    float h_grad_norm;
+    CHECK_CUDA_ERROR(cudaMemcpy(&h_grad_norm, d_grad_norm, sizeof(float), 
+                               cudaMemcpyDeviceToHost));
+    
+    if (h_grad_norm > 10.0f) {
+        std::cout << "Warning: Large gradient norm in conv block: " << h_grad_norm << std::endl;
+    }
+
+    cudaFree(d_grad_norm);
 }
 
 // Destructor
