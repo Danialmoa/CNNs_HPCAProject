@@ -267,52 +267,52 @@ __global__ void batch_norm_forward_kernel(
     float epsilon, float momentum,
     bool is_training
 ) {
-    const int c = blockIdx.z;
+    const int c = blockIdx.x;  // One block per channel
     if (c >= channels) return;
 
+    const int tid = threadIdx.x;
+    const int block_size = blockDim.x;
     const int spatial_size = height * width;
     const int N = batch_size * spatial_size;
-    
-    // Step 1: Calculate mean and variance
-    float sum = 0.0f;
-    float sq_sum = 0.0f;
-    
-    for (int b = 0; b < batch_size; b++) {
-        for (int h = blockIdx.y * blockDim.y + threadIdx.y; h < height; h += blockDim.y * gridDim.y) {
-            for (int w = blockIdx.x * blockDim.x + threadIdx.x; w < width; w += blockDim.x * gridDim.x) {
-                const int idx = ((b * channels + c) * height + h) * width + w;
-                const float val = input[idx];
-                sum += val;
-                sq_sum += val * val;
-            }
-        }
-    }
 
-    // Use shared memory for reduction
     extern __shared__ float shared_mem[];
     float* shared_sum = shared_mem;
-    float* shared_sq_sum = &shared_mem[blockDim.x * blockDim.y];
+    float* shared_sq_sum = &shared_mem[block_size];
 
-    const int tid = threadIdx.y * blockDim.x + threadIdx.x;
+    // Initialize thread accumulator
+    float sum = 0.0f;
+    float sq_sum = 0.0f;
+
+    // Each thread processes multiple elements
+    for (int i = tid; i < N; i += block_size) {
+        const int b = i / spatial_size;
+        const int spatial_idx = i % spatial_size;
+        const int idx = ((b * channels + c) * height * width) + spatial_idx;
+        float val = input[idx];
+        sum += val;
+        sq_sum += val * val;
+    }
+
+    // Store in shared memory
     shared_sum[tid] = sum;
     shared_sq_sum[tid] = sq_sum;
     __syncthreads();
 
-    // Reduce within block
-    for (int s = blockDim.x * blockDim.y / 2; s > 0; s >>= 1) {
-        if (tid < s) {
-            shared_sum[tid] += shared_sum[tid + s];
-            shared_sq_sum[tid] += shared_sq_sum[tid + s];
+    // Parallel reduction in shared memory
+    for (int stride = block_size/2; stride > 0; stride >>= 1) {
+        if (tid < stride) {
+            shared_sum[tid] += shared_sum[tid + stride];
+            shared_sq_sum[tid] += shared_sq_sum[tid + stride];
         }
         __syncthreads();
     }
 
-    // Only thread 0 updates the channel statistics
+    // Thread 0 computes final statistics
     if (tid == 0) {
         float mean = shared_sum[0] / N;
         float mean_sq = shared_sq_sum[0] / N;
-        float var = mean_sq - mean * mean;
-
+        float var = mean_sq - (mean * mean);
+        
         if (is_training) {
             batch_mean[c] = mean;
             batch_var[c] = var;
@@ -324,18 +324,18 @@ __global__ void batch_norm_forward_kernel(
     }
     __syncthreads();
 
-    // Step 2: Normalize and scale
+    // Normalize and scale
     const float mean = is_training ? batch_mean[c] : running_mean[c];
     const float var = is_training ? batch_var[c] : running_var[c];
-    const float std = sqrtf(var + epsilon);
+    const float inv_std = rsqrtf(var + epsilon);
 
-    for (int b = 0; b < batch_size; b++) {
-        for (int h = blockIdx.y * blockDim.y + threadIdx.y; h < height; h += blockDim.y * gridDim.y) {
-            for (int w = blockIdx.x * blockDim.x + threadIdx.x; w < width; w += blockDim.x * gridDim.x) {
-                const int idx = ((b * channels + c) * height + h) * width + w;
-                input[idx] = gamma[c] * (input[idx] - mean) / std + beta[c];
-            }
-        }
+    // Each thread processes multiple elements
+    for (int i = tid; i < N; i += block_size) {
+        const int b = i / spatial_size;
+        const int spatial_idx = i % spatial_size;
+        const int idx = ((b * channels + c) * height * width) + spatial_idx;
+        float normalized = (input[idx] - mean) * inv_std;
+        input[idx] = gamma[c] * normalized + beta[c];
     }
 }
 
@@ -532,16 +532,10 @@ void ConvBlock::forward(const float* d_input, float* d_output, int batch_size, i
     CHECK_LAST_CUDA_ERROR();
 
     // Batch normalization
-    dim3 bn_threads(8, 8);  // Reduced thread count to avoid shared memory limitations
-    dim3 bn_blocks(
-        (conv_output_width + bn_threads.x - 1) / bn_threads.x,
-        (conv_output_height + bn_threads.y - 1) / bn_threads.y,
-        out_channels
-    );
+    const int threads_per_block = 256;
+    size_t shared_mem_size = 2 * threads_per_block * sizeof(float);
     
-    size_t bn_shared_mem_size = 2 * bn_threads.x * bn_threads.y * sizeof(float);
-    
-    batch_norm_forward_kernel<<<bn_blocks, bn_threads, bn_shared_mem_size>>>(
+    batch_norm_forward_kernel<<<out_channels, threads_per_block, shared_mem_size>>>(
         d_conv_output_cache,
         d_gamma,
         d_beta,
