@@ -1,8 +1,4 @@
 #include "../include/conv_block.cuh"
-#include "../include/kernels/conv_kernels.cuh"
-#include "../include/kernels/activation_kernels.cuh"
-#include "../include/kernels/pooling_kernels.cuh"
-#include "../include/kernels/batchnorm_kernels.cuh"
 #include <iostream>
 #include <vector>
 #include <random>
