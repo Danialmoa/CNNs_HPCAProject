@@ -42,12 +42,9 @@ void test_simple_convolution() {
     cudaMemcpy(d_input, input, 16 * sizeof(float), cudaMemcpyHostToDevice);
     cudaMemcpy(d_kernel, kernel, 9 * sizeof(float), cudaMemcpyHostToDevice);
     
-    // Launch kernel
-    dim3 block(16, 16);  // Use a 16x16 block
-    dim3 grid(
-        (out_width + block.x - 1) / block.x,
-        (out_height + block.y - 1) / block.y
-    );
+    // Launch kernel with appropriate block size for small output
+    dim3 block(2, 2);  // Since output is 2x2
+    dim3 grid(1, 1);   // Single grid block is sufficient
     
     conv_forward_kernel<<<grid, block>>>(
         d_input,         // input

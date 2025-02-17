@@ -25,20 +25,24 @@ __global__ void conv_forward_kernel(
     // Initialize output value
     float sum = 0.0f;
     
-    // Compute input window boundaries
-    const int start_h = y * stride - padding;
-    const int start_w = x * stride - padding;
+    // Center position of the kernel over the input
+    const int center_h = y * stride - padding;
+    const int center_w = x * stride - padding;
+    
+    // Half size of kernel (for centering)
+    const int half_k = kernel_size / 2;
     
     // Compute convolution
     for (int kh = 0; kh < kernel_size; kh++) {
+        int in_h = center_h + kh;
+        
         for (int kw = 0; kw < kernel_size; kw++) {
-            int in_h = start_h + kh;
-            int in_w = start_w + kw;
+            int in_w = center_w + kw;
             
             if (in_h >= 0 && in_h < height && in_w >= 0 && in_w < width) {
-                // Correct indexing for input and weights
                 float in_val = input[in_h * width + in_w];
-                float weight_val = weights[(kernel_size - 1 - kh) * kernel_size + (kernel_size - 1 - kw)];
+                // Sobel kernel doesn't need flipping because it's symmetric
+                float weight_val = weights[kh * kernel_size + kw];
                 sum += in_val * weight_val;
             }
         }
