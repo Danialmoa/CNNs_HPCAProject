@@ -57,21 +57,36 @@ int main() {
         // Initialize dataset 
         DataSet dataset("../data");
         
-        // Load the data
+        // Load the data and transfer to GPU
         dataset.load_data();
+        dataset.to_gpu();
         
-        // Get first image and its label
-        float* image = new float[3 * 32 * 32];
-        uint8_t* label = new uint8_t[10];  
+        // Allocate GPU memory for one image and label
+        float* d_image;
+        uint8_t* d_label;
+        float* h_image = new float[3 * 32 * 32];
+        uint8_t* h_label = new uint8_t[10];
 
-        dataset.get_batch_data(image, label, 0, 1);
+        CHECK_CUDA_ERROR(cudaMalloc(&d_image, 3 * 32 * 32 * sizeof(float)));
+        CHECK_CUDA_ERROR(cudaMalloc(&d_label, 10 * sizeof(uint8_t)));
+
+        // Get first image and its label
+        dataset.get_batch_data(d_image, d_label, 0, 1);
+        
+        // Copy data back to host for printing
+        CHECK_CUDA_ERROR(cudaMemcpy(h_image, d_image, 3 * 32 * 32 * sizeof(float), 
+                                  cudaMemcpyDeviceToHost));
+        CHECK_CUDA_ERROR(cudaMemcpy(h_label, d_label, 10 * sizeof(uint8_t), 
+                                  cudaMemcpyDeviceToHost));
         
         // Print the image and label
-        print_image(image, label, 10);
+        print_image(h_image, h_label, 10);
         
         // Cleanup
-        delete[] image;
-        delete[] label;
+        delete[] h_image;
+        delete[] h_label;
+        cudaFree(d_image);
+        cudaFree(d_label);
         
     } catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << std::endl;
