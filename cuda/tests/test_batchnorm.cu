@@ -1,3 +1,6 @@
+#include "../include/kernels/batchnorm_kernels.cuh"
+#include <iostream>
+
 void test_simple_batchnorm() {
     // Test input: 2 channels, 2x2 feature maps
     float input[16] = {
