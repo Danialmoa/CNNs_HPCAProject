@@ -18,7 +18,7 @@ private:
     int conv_output_height{0}, conv_output_width{0};
     int pool_output_height{0}, pool_output_width{0};
     
-    // Device pointers
+    // Device pointers for forward pass
     float* d_weights;         // [out_channels, in_channels, kernel, kernel]
     float* d_biases;          // [out_channels]
     float* d_cache;           // Input cache for backward pass [batch, in_channels, height, width]
@@ -26,16 +26,20 @@ private:
     int* d_pool_indices;      // Pooling indices cache [batch, out_channels, pool_h, pool_w]
     
     // Batch normalization parameters
-    float* d_gamma;
-    float* d_beta;
-    float* d_running_mean;
-    float* d_running_var;
-    float* d_batch_mean;
-    float* d_batch_var;
+    float* d_gamma;           // [out_channels]
+    float* d_beta;            // [out_channels]
+    float* d_running_mean;    // [out_channels]
+    float* d_running_var;     // [out_channels]
+    float* d_batch_mean;      // [out_channels]
+    float* d_batch_var;       // [out_channels]
     float bn_epsilon;
     float bn_momentum;
     bool is_training;
 
+    // Gradient buffers
+    float* d_grad_weights;    // [out_channels, in_channels, kernel, kernel]
+    float* d_grad_biases;     // [out_channels]
+    
     // CUDA streams for parallel execution
     cudaStream_t stream1, stream2, stream3;
     bool streams_initialized;
