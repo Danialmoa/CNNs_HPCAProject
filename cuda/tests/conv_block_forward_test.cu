@@ -124,8 +124,55 @@ int main() {
         // Print input statistics
         print_tensor_stats(h_input, in_channels, height, width, "Input");
 
-        // Forward pass
+        // Print more detailed diagnostics
+        std::cout << "\n=== Initial Weights Statistics ===\n";
+        std::vector<float> h_weights1(hidden_channels * in_channels * kernel_size * kernel_size);
+        cudaMemcpy(h_weights1.data(), conv1.get_weights(), h_weights1.size() * sizeof(float), 
+                  cudaMemcpyDeviceToHost);
+        print_tensor_stats(h_weights1.data(), hidden_channels, kernel_size, kernel_size, "Conv1 Weights");
+
+        // Forward pass with intermediate checks
         conv1.forward(d_input, d_conv1_output, batch_size, height, width);
+        
+        // Check pre-batch norm values
+        std::vector<float> h_conv1_pre_bn(batch_size * hidden_channels * conv1_out_height * conv1_out_width);
+        cudaMemcpy(h_conv1_pre_bn.data(), conv1.get_conv_output_cache(), 
+                  h_conv1_pre_bn.size() * sizeof(float), cudaMemcpyDeviceToHost);
+        print_tensor_stats(h_conv1_pre_bn.data(), hidden_channels, conv1_out_height, conv1_out_width, 
+                          "Conv1 Pre-BN Output");
+
+        // Check batch norm parameters
+        std::vector<float> h_gamma(hidden_channels), h_beta(hidden_channels);
+        std::vector<float> h_running_mean(hidden_channels), h_running_var(hidden_channels);
+        cudaMemcpy(h_gamma.data(), conv1.get_gamma(), hidden_channels * sizeof(float), 
+                  cudaMemcpyDeviceToHost);
+        cudaMemcpy(h_beta.data(), conv1.get_beta(), hidden_channels * sizeof(float), 
+                  cudaMemcpyDeviceToHost);
+        cudaMemcpy(h_running_mean.data(), conv1.get_running_mean(), 
+                  hidden_channels * sizeof(float), cudaMemcpyDeviceToHost);
+        cudaMemcpy(h_running_var.data(), conv1.get_running_var(), 
+                  hidden_channels * sizeof(float), cudaMemcpyDeviceToHost);
+
+        std::cout << "\n=== Batch Norm Parameters ===\n";
+        std::cout << "Gamma (first few): ";
+        for (int i = 0; i < std::min(5, hidden_channels); i++) {
+            std::cout << h_gamma[i] << " ";
+        }
+        std::cout << "\nBeta (first few): ";
+        for (int i = 0; i < std::min(5, hidden_channels); i++) {
+            std::cout << h_beta[i] << " ";
+        }
+        std::cout << "\nRunning Mean (first few): ";
+        for (int i = 0; i < std::min(5, hidden_channels); i++) {
+            std::cout << h_running_mean[i] << " ";
+        }
+        std::cout << "\nRunning Var (first few): ";
+        for (int i = 0; i < std::min(5, hidden_channels); i++) {
+            std::cout << h_running_var[i] << " ";
+        }
+        std::cout << "\n";
+
+        // Forward pass
         conv2.forward(d_conv1_output, d_final_output, batch_size, pool1_out_height, pool1_out_width);
 
         // Get intermediate output
@@ -173,6 +220,14 @@ int main() {
 
         // Print gradient statistics
         print_tensor_stats(h_grad_input.data(), in_channels, height, width, "Input Gradients");
+
+        // For gradient testing, print more detailed gradient statistics
+        std::cout << "\n=== Gradient Statistics ===\n";
+        std::vector<float> h_grad_weights(hidden_channels * in_channels * kernel_size * kernel_size);
+        cudaMemcpy(h_grad_weights.data(), conv1.get_grad_weights(), 
+                  h_grad_weights.size() * sizeof(float), cudaMemcpyDeviceToHost);
+        print_tensor_stats(h_grad_weights.data(), hidden_channels, kernel_size, kernel_size, 
+                          "Conv1 Weight Gradients");
 
         // Cleanup
         delete[] h_input;

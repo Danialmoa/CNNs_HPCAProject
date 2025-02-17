@@ -80,4 +80,9 @@ public:
     // Getters for weights and biases (for testing)
     const float* get_weights() const { return d_weights; }
     const float* get_biases() const { return d_biases; }
+    const float* get_gamma() const { return d_gamma; }
+    const float* get_beta() const { return d_beta; }
+    const float* get_running_mean() const { return d_running_mean; }
+    const float* get_running_var() const { return d_running_var; }
+    const float* get_grad_weights() const { return d_grad_weights; }
 };
