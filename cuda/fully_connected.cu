@@ -168,6 +168,9 @@ void FullyConnectedLayer::allocate_memory(int batch_size) {
             size_t free_memory, total_memory;
             cudaMemGetInfo(&free_memory, &total_memory);
             std::cout << "Allocating FC layer caches:" << std::endl;
+            std::cout << "Batch size: " << batch_size << std::endl;
+            std::cout << "In features: " << in_features << std::endl;
+            std::cout << "Num classes: " << num_classes << std::endl;
             std::cout << "Input cache size: " << (input_cache_size / 1024.0 / 1024.0) << " MB" << std::endl;
             std::cout << "Output cache size: " << (output_cache_size / 1024.0 / 1024.0) << " MB" << std::endl;
             std::cout << "Available GPU memory: " << (free_memory / 1024.0 / 1024.0) << " MB" << std::endl;
