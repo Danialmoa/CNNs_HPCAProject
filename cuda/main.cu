@@ -159,6 +159,7 @@ int main() {
                     
                     epoch_loss += batch_loss;
                     epoch_accuracy += batch_accuracy;
+                    std::cout << "Batch " << batch + 1 << "/" << num_batches << " - Loss: " << batch_loss << " - Accuracy: " << batch_accuracy * 100 << "%" << std::endl;
 
                     // Backward pass
                     fc.backward(d_batch_labels, d_grad_fc_output, batch_size);
