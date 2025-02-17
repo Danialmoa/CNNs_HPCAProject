@@ -107,8 +107,8 @@ FullyConnectedLayer::FullyConnectedLayer(int in_features, int num_classes, float
     : in_features(in_features), 
     num_classes(num_classes), 
     learning_rate(learning_rate),
-    weights_optimizer(learning_rate),
-    bias_optimizer(learning_rate),
+    weights_optimizer(num_classes * in_features, learning_rate),
+    bias_optimizer(num_classes, learning_rate),
     current_batch_size(0),
     d_input_cache(nullptr),
     d_output_cache(nullptr),
@@ -129,9 +129,6 @@ FullyConnectedLayer::FullyConnectedLayer(int in_features, int num_classes, float
         w = distribution(gen);
     }
     std::fill(h_biases.begin(), h_biases.end(), 0.01f);
-
-    weights_optimizer.init(num_classes * in_features);
-    bias_optimizer.init(num_classes);
 
     // Allocate and copy to GPU
     CHECK_CUDA_ERROR(cudaMalloc(&d_weights, h_weights.size() * sizeof(float)));
@@ -245,11 +242,9 @@ void FullyConnectedLayer::backward(const uint8_t* d_labels, float* d_grad_input,
     );
     CHECK_LAST_CUDA_ERROR();
     
-    // Update weights and biases
-    const float update_factor = -learning_rate;
-    
-    weights_optimizer.update(d_weights, d_grad_weights, stream2);
-    bias_optimizer.update(d_biases, d_grad_biases, stream3);
+    // Update weights and biases using Adam optimizer
+    weights_optimizer.update(d_weights, d_grad_weights);
+    bias_optimizer.update(d_biases, d_grad_biases);
     
     // Free temporary memory
     cudaFree(d_grad_weights);
