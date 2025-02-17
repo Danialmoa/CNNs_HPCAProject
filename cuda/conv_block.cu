@@ -134,8 +134,21 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input,
     const int block_size = 256;
     const int num_blocks = (total_elements + block_size - 1) / block_size;
 
-    float* d_relu_grad;
-    cudaMalloc(&d_relu_grad, total_elements * sizeof(float));
+    float* d_relu_grad = nullptr;
+    float* d_gamma_grad = nullptr;
+    float* d_beta_grad = nullptr;
+    float* d_weight_grad = nullptr;
+    float* d_bias_grad = nullptr;
+
+    // Allocate if not already allocated
+    if (!d_relu_grad) {
+        CHECK_CUDA_ERROR(cudaMalloc(&d_relu_grad, total_elements * sizeof(float)));
+        CHECK_CUDA_ERROR(cudaMalloc(&d_gamma_grad, out_channels * sizeof(float)));
+        CHECK_CUDA_ERROR(cudaMalloc(&d_beta_grad, out_channels * sizeof(float)));
+        CHECK_CUDA_ERROR(cudaMalloc(&d_weight_grad, 
+            out_channels * in_channels * kernel_size * kernel_size * sizeof(float)));
+        CHECK_CUDA_ERROR(cudaMalloc(&d_bias_grad, out_channels * sizeof(float)));
+    }
 
     relu_backward_kernel<<<num_blocks, block_size, 0, stream2>>>(
         d_conv_output_cache,  // Grad from pooling
@@ -146,11 +159,6 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input,
 
     // 3. Batch Normalization Backward
     const int threads_per_block = 256;
-    float* d_gamma_grad;
-    float* d_beta_grad;
-    cudaMalloc(&d_gamma_grad, out_channels * sizeof(float));
-    cudaMalloc(&d_beta_grad, out_channels * sizeof(float));
-
     batch_norm_backward_kernel<<<out_channels, threads_per_block, 0, stream2>>>(
         d_relu_grad,
         d_conv_output_cache,  // Original input to BN
@@ -174,12 +182,6 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input,
         (conv_output_height + conv_block.y - 1) / conv_block.y,
         batch_size * out_channels
     );
-
-    float* d_weight_grad;
-    float* d_bias_grad;
-    cudaMalloc(&d_weight_grad, 
-        out_channels * in_channels * kernel_size * kernel_size * sizeof(float));
-    cudaMalloc(&d_bias_grad, out_channels * sizeof(float));
 
     conv_backward_kernel<<<conv_grid, conv_block, 0, stream3>>>(
         d_conv_output_cache,  // Grad from BN
@@ -205,13 +207,6 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input,
     bias_optimizer.update(d_biases, d_bias_grad);
     gamma_optimizer.update(d_gamma, d_gamma_grad);
     beta_optimizer.update(d_beta, d_beta_grad);
-
-    // Clean up temporary buffers
-    cudaFree(d_relu_grad);
-    cudaFree(d_gamma_grad);
-    cudaFree(d_beta_grad);
-    cudaFree(d_weight_grad);
-    cudaFree(d_bias_grad);
 
     // Synchronize all streams
     cudaStreamSynchronize(stream1);
