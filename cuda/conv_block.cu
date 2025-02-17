@@ -3,6 +3,7 @@
 #include "../include/kernels/activation_kernels.cuh"
 #include "../include/kernels/pooling_kernels.cuh"
 #include "../include/kernels/batchnorm_kernels.cuh"
+#include "cuda_utils.cuh"
 #include <random>
 #include <cmath>
 
