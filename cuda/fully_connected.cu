@@ -152,6 +152,9 @@ void FullyConnectedLayer::allocate_memory(int batch_size) {
             if (d_output_cache) cudaFree(d_output_cache);
 
             // Log memory requirements
+            size_t input_cache_size = batch_size * in_features * sizeof(float);
+            size_t output_cache_size = batch_size * num_classes * sizeof(float);
+        
             size_t free_memory, total_memory;
             cudaMemGetInfo(&free_memory, &total_memory);
             std::cout << "Allocating FC layer caches:" << std::endl;
