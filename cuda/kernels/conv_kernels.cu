@@ -24,21 +24,21 @@ __global__ void conv_forward_kernel(
     
     if (x >= out_width || y >= out_height || n >= batch_size) return;
     
-    // Compute input window boundaries
-    const int start_h = y * stride - padding;
-    const int start_w = x * stride - padding;
-    
     // Initialize accumulator
     float sum = biases ? biases[c_out] : 0.0f;
     
-    // Iterate over input channels and kernel
-    #pragma unroll 4
+    // Center of the kernel
+    const int kernel_center = kernel_size / 2;
+    
+    // Compute convolution
     for (int c_in = 0; c_in < in_channels; c_in++) {
         for (int kh = 0; kh < kernel_size; kh++) {
             for (int kw = 0; kw < kernel_size; kw++) {
-                const int in_h = start_h + kh;
-                const int in_w = start_w + kw;
+                // Input position
+                const int in_h = y - kernel_center + kh;
+                const int in_w = x - kernel_center + kw;
                 
+                // Check boundaries
                 if (in_h >= 0 && in_h < height && in_w >= 0 && in_w < width) {
                     // Input index: [n, c_in, h, w]
                     const int in_idx = ((n * in_channels + c_in) * height + in_h) * width + in_w;

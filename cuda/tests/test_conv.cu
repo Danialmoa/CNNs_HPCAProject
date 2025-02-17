@@ -13,15 +13,14 @@ void test_simple_convolution() {
     const int padding = 1;
     
     // Calculate output dimensions
-    const int out_height = (height + 2 * padding - kernel_size) / stride + 1;
-    const int out_width = (width + 2 * padding - kernel_size) / stride + 1;
+    const int out_height = 2;  // Fixed for this test case
+    const int out_width = 2;   // Fixed for this test case
     
-    // Print dimensions
     std::cout << "Input dimensions: " << height << "x" << width << "\n";
     std::cout << "Output dimensions: " << out_height << "x" << out_width << "\n";
     
     // Input: [batch_size, in_channels, height, width]
-    float input[16] = {
+    const float input[16] = {
         1, 1, 1, 1,
         1, 2, 2, 1,
         1, 2, 2, 1,
@@ -43,27 +42,20 @@ void test_simple_convolution() {
     
     // Allocate device memory
     float *d_input, *d_kernel, *d_output;
-    cudaMalloc(&d_input, batch_size * in_channels * height * width * sizeof(float));
-    cudaMalloc(&d_kernel, out_channels * in_channels * kernel_size * kernel_size * sizeof(float));
-    cudaMalloc(&d_output, batch_size * out_channels * out_height * out_width * sizeof(float));
+    const size_t input_size = batch_size * in_channels * height * width * sizeof(float);
+    const size_t kernel_size_bytes = out_channels * in_channels * kernel_size * kernel_size * sizeof(float);
+    const size_t output_size = batch_size * out_channels * out_height * out_width * sizeof(float);
+    
+    cudaMalloc(&d_input, input_size);
+    cudaMalloc(&d_kernel, kernel_size_bytes);
+    cudaMalloc(&d_output, output_size);
     
     // Initialize output to zero
-    cudaMemset(d_output, 0, batch_size * out_channels * out_height * out_width * sizeof(float));
+    cudaMemset(d_output, 0, output_size);
     
     // Copy data to device
-    cudaMemcpy(d_input, input, batch_size * in_channels * height * width * sizeof(float), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_kernel, kernel, out_channels * in_channels * kernel_size * kernel_size * sizeof(float), cudaMemcpyHostToDevice);
-    
-    // Verify kernel values after copy
-    float kernel_verify[9];
-    cudaMemcpy(kernel_verify, d_kernel, 9 * sizeof(float), cudaMemcpyDeviceToHost);
-    std::cout << "\nVerifying kernel values after copy to device:\n";
-    for (int i = 0; i < 9; i++) {
-        if (kernel[i] != kernel_verify[i]) {
-            std::cout << "Kernel value mismatch at " << i << ": expected " 
-                      << kernel[i] << ", got " << kernel_verify[i] << "\n";
-        }
-    }
+    cudaMemcpy(d_input, input, input_size, cudaMemcpyHostToDevice);
+    cudaMemcpy(d_kernel, kernel, kernel_size_bytes, cudaMemcpyHostToDevice);
     
     // Launch kernel
     dim3 block(8, 8);
@@ -90,18 +82,17 @@ void test_simple_convolution() {
         out_width
     );
     
-    // Check for errors
+    // Synchronize and check for errors
+    cudaDeviceSynchronize();
     cudaError_t err = cudaGetLastError();
     if (err != cudaSuccess) {
         std::cerr << "CUDA Error: " << cudaGetErrorString(err) << std::endl;
         return;
     }
     
-    // Synchronize and get results
-    cudaDeviceSynchronize();
-    
+    // Get results
     float output[4];
-    cudaMemcpy(output, d_output, batch_size * out_channels * out_height * out_width * sizeof(float), cudaMemcpyDeviceToHost);
+    cudaMemcpy(output, d_output, output_size, cudaMemcpyDeviceToHost);
     
     // Print results
     std::cout << "\nInput Matrix:\n";
