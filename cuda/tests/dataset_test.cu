@@ -54,8 +54,11 @@ void print_image(const float* image_data, const float* label_data, int num_class
 
 int main() {
     try {
-        // Initialize dataset
-        Dataset dataset("path/to/your/dataset");
+        // Initialize dataset 
+        DataSet dataset("../data");
+        
+        // Load the data
+        dataset.load_data();
         
         // Get first image and its label
         float* image = new float[3 * 32 * 32];
