@@ -2,11 +2,11 @@
 #include <iostream>
 #include <iomanip>
 
-void print_image(const float* image_data, const float* label_data, int num_classes) {
+void print_image(const float* image_data, const uint8_t* label_data, int num_classes) {
     // Print label
     std::cout << "Label one-hot encoding: ";
     for (int i = 0; i < num_classes; i++) {
-        std::cout << label_data[i] << " ";
+        std::cout << (int)label_data[i] << " ";  
     }
     std::cout << "\nLabel index: ";
     for (int i = 0; i < num_classes; i++) {
