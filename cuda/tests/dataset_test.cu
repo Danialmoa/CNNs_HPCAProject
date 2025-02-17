@@ -62,9 +62,9 @@ int main() {
         
         // Get first image and its label
         float* image = new float[3 * 32 * 32];
-        float* label = new float[10];  // Assuming 10 classes
-        
-        dataset.get_image_and_label(0, image, label);
+        float* label = new float[10];  
+
+        dataset.get_batch_data(image, label, 0, 1);
         
         // Print the image and label
         print_image(image, label, 10);
