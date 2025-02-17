@@ -4,6 +4,10 @@
 #include <iomanip>
 #include <numeric>
 
+// Add function declarations at the top of the file
+float calculate_mean(const float* data, int size);
+float calculate_std(const float* data, int size);
+
 // Helper function to print 3D tensor (channel, height, width)
 void print_tensor(const float* data, int channels, int height, int width, const std::string& name) {
     std::cout << "\n" << name << " [" << channels << ", " << height << ", " << width << "]:\n";
@@ -257,7 +261,7 @@ int main() {
     return 0;
 }
 
-// Helper functions for statistics
+// Function implementations remain at the bottom
 float calculate_mean(const float* data, int size) {
     float sum = 0.0f;
     for (int i = 0; i < size; i++) {
