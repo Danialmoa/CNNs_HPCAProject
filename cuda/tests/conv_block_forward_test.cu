@@ -31,6 +31,33 @@ float calculate_loss(const float* output, const float* target, int size) {
     return loss / size;
 }
 
+// Modify the input data initialization
+float* generate_test_input(int batch_size, int channels, int height, int width) {
+    float* data = new float[batch_size * channels * height * width];
+    for (int b = 0; b < batch_size; b++) {
+        for (int c = 0; c < channels; c++) {
+            for (int h = 0; h < height; h++) {
+                for (int w = 0; w < width; w++) {
+                    int idx = ((b * channels + c) * height + h) * width + w;
+                    // Generate different patterns for each channel
+                    switch(c) {
+                        case 0:
+                            data[idx] = (h + w) % 2 == 0 ? 1.0f : 0.0f; // Checkerboard
+                            break;
+                        case 1:
+                            data[idx] = float(h) / height; // Vertical gradient
+                            break;
+                        case 2:
+                            data[idx] = float(w) / width; // Horizontal gradient
+                            break;
+                    }
+                }
+            }
+        }
+    }
+    return data;
+}
+
 int main() {
     try {
         // Test parameters - increased batch size to better demonstrate stream benefits
@@ -81,35 +108,33 @@ int main() {
         cudaEventCreate(&start);
         cudaEventCreate(&stop);
 
+        // Add more detailed logging
+        std::cout << "\nInitial parameters:";
+        std::cout << "\nConv1 Weights (mean, std): " 
+                  << calculate_mean(conv1.get_weights(), hidden_channels * in_channels * kernel_size * kernel_size) << ", "
+                  << calculate_std(conv1.get_weights(), hidden_channels * in_channels * kernel_size * kernel_size);
+        std::cout << "\nConv2 Weights (mean, std): " 
+                  << calculate_mean(conv2.get_weights(), out_channels * hidden_channels * kernel_size * kernel_size) << ", "
+                  << calculate_std(conv2.get_weights(), out_channels * hidden_channels * kernel_size * kernel_size) << std::endl;
+
         // Training loop
         for (int epoch = 0; epoch < num_epochs; ++epoch) {
             std::cout << "\n=== Epoch " << epoch + 1 << " ===\n";
 
             // Create input data
-            std::vector<float> h_input(batch_size * in_channels * height * width);
-            for (int b = 0; b < batch_size; b++) {
-                for (int c = 0; c < in_channels; c++) {
-                    for (int h = 0; h < height; h++) {
-                        for (int w = 0; w < width; w++) {
-                            int idx = ((b * in_channels + c) * height + h) * width + w;
-                            // Create a checkerboard pattern
-                            h_input[idx] = ((h + w) % 2) * (c + 1) + epoch * 0.1f;
-                        }
-                    }
-                }
-            }
+            float* h_input = generate_test_input(batch_size, in_channels, height, width);
 
             // Create target data
             std::vector<float> h_target(batch_size * out_channels * pool2_out_height * pool2_out_width, 1.0f);
 
             // Allocate device memory with proper stream synchronization
             float *d_input, *d_conv1_output, *d_final_output;
-            cudaMalloc(&d_input, h_input.size() * sizeof(float));
+            cudaMalloc(&d_input, batch_size * in_channels * height * width * sizeof(float));
             cudaMalloc(&d_conv1_output, batch_size * hidden_channels * pool1_out_height * pool1_out_width * sizeof(float));
             cudaMalloc(&d_final_output, batch_size * out_channels * pool2_out_height * pool2_out_width * sizeof(float));
 
             // Copy input to device
-            cudaMemcpy(d_input, h_input.data(), h_input.size() * sizeof(float), cudaMemcpyHostToDevice);
+            cudaMemcpy(d_input, h_input, batch_size * in_channels * height * width * sizeof(float), cudaMemcpyHostToDevice);
 
             // Time the forward pass
             cudaEventRecord(start);
@@ -134,7 +159,7 @@ int main() {
 
             // Print only first batch results to avoid overwhelming output
             if (epoch == 0) {
-                print_tensor(h_input.data(), in_channels, height, width, "Input (first batch)");
+                print_tensor(h_input, in_channels, height, width, "Input (first batch)");
                 print_tensor(h_output.data(), out_channels, pool2_out_height, pool2_out_width, 
                             "Output (first batch)");
             }
@@ -146,7 +171,7 @@ int main() {
             float *d_grad_output, *d_grad_conv1_output, *d_grad_input;
             cudaMalloc(&d_grad_output, h_output.size() * sizeof(float));
             cudaMalloc(&d_grad_conv1_output, batch_size * hidden_channels * pool1_out_height * pool1_out_width * sizeof(float));
-            cudaMalloc(&d_grad_input, h_input.size() * sizeof(float));
+            cudaMalloc(&d_grad_input, batch_size * in_channels * height * width * sizeof(float));
 
             // Compute gradients
             std::vector<float> h_grad_output(h_output.size());
@@ -167,7 +192,7 @@ int main() {
             std::cout << "Backward pass time: " << milliseconds << " ms\n";
 
             // Get gradients and updated parameters
-            std::vector<float> h_grad_input(h_input.size());
+            std::vector<float> h_grad_input(batch_size * in_channels * height * width);
             cudaMemcpy(h_grad_input.data(), d_grad_input, h_grad_input.size() * sizeof(float), 
                       cudaMemcpyDeviceToHost);
 
@@ -230,4 +255,23 @@ int main() {
     }
 
     return 0;
+}
+
+// Helper functions for statistics
+float calculate_mean(const float* data, int size) {
+    float sum = 0.0f;
+    for (int i = 0; i < size; i++) {
+        sum += data[i];
+    }
+    return sum / size;
+}
+
+float calculate_std(const float* data, int size) {
+    float mean = calculate_mean(data, size);
+    float sum_sq = 0.0f;
+    for (int i = 0; i < size; i++) {
+        float diff = data[i] - mean;
+        sum_sq += diff * diff;
+    }
+    return std::sqrt(sum_sq / size);
 }
