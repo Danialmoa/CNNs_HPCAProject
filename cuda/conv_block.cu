@@ -40,7 +40,6 @@ void ConvBlock::forward(const float* d_input, float* d_output,
     std::cout << "Pool output shape: " << batch_size << "x" << out_channels << "x" 
               << pool_output_height << "x" << pool_output_width << std::endl;
 
-
     // Allocate memory if needed
     allocate_memory(batch_size);
 
@@ -324,10 +323,17 @@ void ConvBlock::allocate_memory(int batch_size) {
 }
 
 void ConvBlock::free_memory() {
-    if (current_batch_size > 0) {
+    if (d_cache) {
         cudaFree(d_cache);
+        d_cache = nullptr;
+    }
+    if (d_conv_output_cache) {
         cudaFree(d_conv_output_cache);
+        d_conv_output_cache = nullptr;
+    }
+    if (d_pool_indices) {
         cudaFree(d_pool_indices);
+        d_pool_indices = nullptr;
     }
 }
 
