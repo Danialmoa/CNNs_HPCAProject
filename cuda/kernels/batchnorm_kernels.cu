@@ -49,7 +49,7 @@ __global__ void batch_norm_forward_kernel(
     shared_sq_sum[tid] = sq_sum;
     __syncthreads();
 
-    // Reduction
+    // Reduction in shared memory
     for (int stride = block_size/2; stride > 0; stride >>= 1) {
         if (tid < stride) {
             shared_sum[tid] += shared_sum[tid + stride];
@@ -58,15 +58,16 @@ __global__ void batch_norm_forward_kernel(
         __syncthreads();
     }
 
-    float mean, var;
+    // Only thread 0 updates the batch statistics
     if (tid == 0) {
-        mean = shared_sum[0] / N;
+        float mean = shared_sum[0] / N;
         float mean_sq = shared_sq_sum[0] / N;
-        var = mean_sq - (mean * mean);
+        float var = mean_sq - (mean * mean);
+        
+        batch_mean[c] = mean;
+        batch_var[c] = var;
         
         if (is_training) {
-            batch_mean[c] = mean;
-            batch_var[c] = var;
             running_mean[c] = momentum * running_mean[c] + (1.0f - momentum) * mean;
             running_var[c] = momentum * running_var[c] + (1.0f - momentum) * var;
         }
@@ -74,9 +75,9 @@ __global__ void batch_norm_forward_kernel(
     __syncthreads();
 
     // Second pass: normalize
-    mean = is_training ? batch_mean[c] : running_mean[c];
-    var = is_training ? batch_var[c] : running_var[c];
-    const float inv_std = rsqrtf(var + epsilon);
+    float mean = batch_mean[c];
+    float var = batch_var[c];
+    float inv_std = rsqrtf(var + epsilon);
 
     for (int i = tid; i < N; i += block_size) {
         const int b = i / spatial_size;
