@@ -600,21 +600,33 @@ void ConvBlock::forward(const float* d_input, float* d_output,
 void ConvBlock::backward(const float* d_grad_output, float* d_grad_input, 
                         int batch_size, int height, int width) {
     // Allocate temporary gradients for batch norm parameters
-    float *d_grad_gamma, *d_grad_beta;
+    float *d_grad_gamma, *d_grad_beta, *d_grad_weights, *d_grad_biases;
     CHECK_CUDA_ERROR(cudaMalloc(&d_grad_gamma, out_channels * sizeof(float)));
     CHECK_CUDA_ERROR(cudaMalloc(&d_grad_beta, out_channels * sizeof(float)));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_grad_weights, 
+        out_channels * in_channels * kernel_size * kernel_size * sizeof(float)));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_grad_biases, out_channels * sizeof(float)));
+    
     CHECK_CUDA_ERROR(cudaMemset(d_grad_gamma, 0, out_channels * sizeof(float)));
     CHECK_CUDA_ERROR(cudaMemset(d_grad_beta, 0, out_channels * sizeof(float)));
+    CHECK_CUDA_ERROR(cudaMemset(d_grad_weights, 0, 
+        out_channels * in_channels * kernel_size * kernel_size * sizeof(float)));
+    CHECK_CUDA_ERROR(cudaMemset(d_grad_biases, 0, out_channels * sizeof(float)));
 
     // Temporary buffer for gradients before batch norm
     float* d_grad_pre_bn;
     CHECK_CUDA_ERROR(cudaMalloc(&d_grad_pre_bn, 
         batch_size * out_channels * conv_output_height * conv_output_width * sizeof(float)));
 
-    // Backward pass through ReLU first (reusing existing code)
+    // Define block and grid dimensions for ReLU backward
+    const int block_size = 256;
+    const int total_conv_elements = batch_size * out_channels * conv_output_height * conv_output_width;
+    const int num_blocks = (total_conv_elements + block_size - 1) / block_size;
+
+    // Backward pass through ReLU
     relu_backward_kernel<<<num_blocks, block_size>>>(
         d_grad_output,
-        d_conv_output_cache,  // This now contains the batch normalized output
+        d_conv_output_cache,
         d_grad_pre_bn,
         total_conv_elements
     );
@@ -623,11 +635,11 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input,
     // Backward pass through batch normalization
     batch_norm_backward_kernel<<<out_channels, 1>>>(
         d_grad_pre_bn,
-        d_conv_output_cache,  // Original input to batch norm
+        d_conv_output_cache,
         d_gamma,
         d_batch_mean,
         d_batch_var,
-        d_grad_pre_bn,  // Reuse buffer for output
+        d_grad_pre_bn,
         d_grad_gamma,
         d_grad_beta,
         batch_size,
@@ -638,13 +650,16 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input,
     );
     CHECK_LAST_CUDA_ERROR();
 
+    // Define grid dimensions for convolution backward
+    dim3 conv_grid(batch_size, out_channels, conv_output_height * conv_output_width);
+
     // Update batch norm parameters using Adam optimizer
     gamma_optimizer.update(d_gamma, d_grad_gamma, stream1);
     beta_optimizer.update(d_beta, d_grad_beta, stream2);
 
-    // Continue with existing convolution backward pass
+    // Continue with convolution backward pass
     conv_backward_kernel<<<conv_grid, 1, 0, stream3>>>(
-        d_grad_pre_bn,  // Use the gradient after batch norm
+        d_grad_pre_bn,
         d_cache,
         d_weights,
         d_grad_input,
@@ -663,9 +678,15 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input,
     );
     CHECK_LAST_CUDA_ERROR();
 
+    // Update weights and biases using Adam optimizer
+    weights_optimizer.update(d_weights, d_grad_weights, stream1);
+    bias_optimizer.update(d_biases, d_grad_biases, stream2);
+
     // Clean up temporary memory
     cudaFree(d_grad_gamma);
     cudaFree(d_grad_beta);
+    cudaFree(d_grad_weights);
+    cudaFree(d_grad_biases);
     cudaFree(d_grad_pre_bn);
 
     // Synchronize streams
