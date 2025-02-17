@@ -267,44 +267,48 @@ __global__ void batch_norm_forward_kernel(
     float epsilon, float momentum,
     bool is_training
 ) {
-    const int tx = threadIdx.x;
-    const int ty = threadIdx.y;
-    const int bx = blockIdx.x;
-    const int by = blockIdx.y;
     const int c = blockIdx.z;
-
     if (c >= channels) return;
-
-    extern __shared__ float shared_mem[];
-    float* shared_sum = shared_mem;
-    float* shared_sq_sum = &shared_mem[blockDim.x * blockDim.y];
 
     const int spatial_size = height * width;
     const int N = batch_size * spatial_size;
     
-    // Initialize shared memory
-    if (tx == 0 && ty == 0) {
-        shared_sum[0] = 0.0f;
-        shared_sq_sum[0] = 0.0f;
-    }
-    __syncthreads();
-
-    // Step 1: Calculate mean and variance using parallel reduction
+    // Step 1: Calculate mean and variance
+    float sum = 0.0f;
+    float sq_sum = 0.0f;
+    
     for (int b = 0; b < batch_size; b++) {
-        const int h = by * blockDim.y + ty;
-        const int w = bx * blockDim.x + tx;
-        
-        if (h < height && w < width) {
-            const int idx = ((b * channels + c) * height + h) * width + w;
-            const float val = input[idx];
-            atomicAdd(&shared_sum[0], val);
-            atomicAdd(&shared_sq_sum[0], val * val);
+        for (int h = blockIdx.y * blockDim.y + threadIdx.y; h < height; h += blockDim.y * gridDim.y) {
+            for (int w = blockIdx.x * blockDim.x + threadIdx.x; w < width; w += blockDim.x * gridDim.x) {
+                const int idx = ((b * channels + c) * height + h) * width + w;
+                const float val = input[idx];
+                sum += val;
+                sq_sum += val * val;
+            }
         }
     }
+
+    // Use shared memory for reduction
+    extern __shared__ float shared_mem[];
+    float* shared_sum = shared_mem;
+    float* shared_sq_sum = &shared_mem[blockDim.x * blockDim.y];
+
+    const int tid = threadIdx.y * blockDim.x + threadIdx.x;
+    shared_sum[tid] = sum;
+    shared_sq_sum[tid] = sq_sum;
     __syncthreads();
 
-    // Only one thread per block updates the channel statistics
-    if (tx == 0 && ty == 0) {
+    // Reduce within block
+    for (int s = blockDim.x * blockDim.y / 2; s > 0; s >>= 1) {
+        if (tid < s) {
+            shared_sum[tid] += shared_sum[tid + s];
+            shared_sq_sum[tid] += shared_sq_sum[tid + s];
+        }
+        __syncthreads();
+    }
+
+    // Only thread 0 updates the channel statistics
+    if (tid == 0) {
         float mean = shared_sum[0] / N;
         float mean_sq = shared_sq_sum[0] / N;
         float var = mean_sq - mean * mean;
@@ -316,9 +320,6 @@ __global__ void batch_norm_forward_kernel(
             // Update running statistics
             running_mean[c] = momentum * running_mean[c] + (1.0f - momentum) * mean;
             running_var[c] = momentum * running_var[c] + (1.0f - momentum) * var;
-        } else {
-            mean = running_mean[c];
-            var = running_var[c];
         }
     }
     __syncthreads();
@@ -329,12 +330,11 @@ __global__ void batch_norm_forward_kernel(
     const float std = sqrtf(var + epsilon);
 
     for (int b = 0; b < batch_size; b++) {
-        const int h = by * blockDim.y + ty;
-        const int w = bx * blockDim.x + tx;
-        
-        if (h < height && w < width) {
-            const int idx = ((b * channels + c) * height + h) * width + w;
-            input[idx] = gamma[c] * (input[idx] - mean) / std + beta[c];
+        for (int h = blockIdx.y * blockDim.y + threadIdx.y; h < height; h += blockDim.y * gridDim.y) {
+            for (int w = blockIdx.x * blockDim.x + threadIdx.x; w < width; w += blockDim.x * gridDim.x) {
+                const int idx = ((b * channels + c) * height + h) * width + w;
+                input[idx] = gamma[c] * (input[idx] - mean) / std + beta[c];
+            }
         }
     }
 }
@@ -532,7 +532,7 @@ void ConvBlock::forward(const float* d_input, float* d_output, int batch_size, i
     CHECK_LAST_CUDA_ERROR();
 
     // Batch normalization
-    dim3 bn_threads(16, 16);
+    dim3 bn_threads(8, 8);  // Reduced thread count to avoid shared memory limitations
     dim3 bn_blocks(
         (conv_output_width + bn_threads.x - 1) / bn_threads.x,
         (conv_output_height + bn_threads.y - 1) / bn_threads.y,

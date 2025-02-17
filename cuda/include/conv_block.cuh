@@ -18,7 +18,7 @@ private:
     int conv_output_height{0}, conv_output_width{0};
     int pool_output_height{0}, pool_output_width{0};
     
-    // Device pointers for forward pass
+    // Device pointers
     float* d_weights;         // [out_channels, in_channels, kernel, kernel]
     float* d_biases;          // [out_channels]
     float* d_cache;           // Input cache for backward pass [batch, in_channels, height, width]
