@@ -23,6 +23,15 @@ void test_simple_convolution() {
         8, -8
     };
     
+    // Calculate output dimensions
+    const int height = 4;
+    const int width = 4;
+    const int kernel_size = 3;
+    const int stride = 1;
+    const int padding = 1;
+    const int out_height = (height + 2 * padding - kernel_size) / stride + 1;
+    const int out_width = (width + 2 * padding - kernel_size) / stride + 1;
+    
     // Allocate device memory
     float *d_input, *d_kernel, *d_output;
     cudaMalloc(&d_input, 16 * sizeof(float));
@@ -32,11 +41,6 @@ void test_simple_convolution() {
     // Copy data to device
     cudaMemcpy(d_input, input, 16 * sizeof(float), cudaMemcpyHostToDevice);
     cudaMemcpy(d_kernel, kernel, 9 * sizeof(float), cudaMemcpyHostToDevice);
-    
-    // Calculate shared memory size
-    const int BLOCK_SIZE = 16;
-    size_t shared_mem_size = 
-        ((BLOCK_SIZE + 3 - 1) * (BLOCK_SIZE + 3 - 1) + 3 * 3) * sizeof(float);
     
     // Launch kernel
     dim3 block(16, 16);  // Use a 16x16 block
@@ -53,13 +57,13 @@ void test_simple_convolution() {
         1,              // batch_size
         1,              // in_channels
         1,              // out_channels
-        4,              // height
-        4,              // width
-        3,              // kernel_size
-        1,              // stride
-        1,              // padding
-        2,              // out_height
-        2               // out_width
+        height,         // height
+        width,          // width
+        kernel_size,    // kernel_size
+        stride,         // stride
+        padding,        // padding
+        out_height,     // out_height
+        out_width       // out_width
     );
     
     // Check for errors
