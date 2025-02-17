@@ -16,18 +16,14 @@ __global__ void conv_forward_kernel(
     int out_height,
     int out_width
 ) {
-    extern __shared__ float shared_mem[];
-    
-    // Calculate thread and block indices
-    const int tx = threadIdx.x;
-    const int ty = threadIdx.y;
-    const int x = blockIdx.x * blockDim.x + tx;
-    const int y = blockIdx.y * blockDim.y + ty;
+    // Calculate output position
+    const int x = blockIdx.x * blockDim.x + threadIdx.x;
+    const int y = blockIdx.y * blockDim.y + threadIdx.y;
     
     if (x >= out_width || y >= out_height) return;
     
     // Initialize output value
-    float sum = (biases != nullptr) ? biases[0] : 0.0f;
+    float sum = 0.0f;
     
     // Compute input window boundaries
     const int start_h = y * stride - padding;
@@ -35,23 +31,21 @@ __global__ void conv_forward_kernel(
     
     // Compute convolution
     for (int kh = 0; kh < kernel_size; kh++) {
-        int in_h = start_h + kh;
-        
         for (int kw = 0; kw < kernel_size; kw++) {
+            int in_h = start_h + kh;
             int in_w = start_w + kw;
             
             if (in_h >= 0 && in_h < height && in_w >= 0 && in_w < width) {
+                // Correct indexing for input and weights
                 float in_val = input[in_h * width + in_w];
-                float weight_val = weights[kh * kernel_size + kw];
+                float weight_val = weights[(kernel_size - 1 - kh) * kernel_size + (kernel_size - 1 - kw)];
                 sum += in_val * weight_val;
             }
         }
     }
     
     // Write output
-    if (x < out_width && y < out_height) {
-        output[y * out_width + x] = sum;
-    }
+    output[y * out_width + x] = sum;
 }
 
 __global__ void conv_backward_kernel(
