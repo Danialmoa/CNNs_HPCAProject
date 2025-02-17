@@ -74,7 +74,7 @@ int main() {
         std::cout << "Number of SMs: " << prop.multiProcessorCount << std::endl;
 
         // Training hyperparameters
-        const std::vector<int> batch_sizes = {64};
+        const std::vector<int> batch_sizes = {256};
         const int num_epochs = 1;
         const float learning_rate = 0.001f;
         
@@ -136,11 +136,6 @@ int main() {
             // Training loop
             std::cout << "Starting training..." << std::endl;
 
-            size_t free_memory, total_memory;
-            cudaMemGetInfo(&free_memory, &total_memory);
-            std::cout << "Available GPU memory before training: " << free_memory / 1024 / 1024 << "MB" << std::endl;
-
-
             for (int epoch = 0; epoch < num_epochs; ++epoch) {
                 float epoch_loss = 0.0f;
                 float epoch_accuracy = 0.0f;
@@ -149,7 +144,6 @@ int main() {
                 for (int batch = 0; batch < num_batches; ++batch) {
                     // Get batch data
                     dataset.get_batch_data(d_batch_images, d_batch_labels, batch, batch_size);
-                    size_t free_memory, total_memory;
                     // Forward pass
                     conv1.forward(d_batch_images, d_conv_1_output, batch_size, 32, 32);
                     conv2.forward(d_conv_1_output, d_conv_2_output, batch_size, 16, 16);

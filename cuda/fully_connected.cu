@@ -178,6 +178,17 @@ void FullyConnectedLayer::free_memory() {
 }
 
 void FullyConnectedLayer::forward(const float* d_input, float* d_output, int batch_size) {
+
+    //Debug
+    float* h_input = new float[batch_size * in_features];
+    cudaMemcpy(h_input, d_input, batch_size * in_features * sizeof(float), cudaMemcpyDeviceToHost);
+    float input_sum = 0;
+    for(int i = 0; i < 10; i++) {
+        input_sum += h_input[i];
+    }
+    std::cout << "Input first 10 values sum: " << input_sum << std::endl;
+    delete[] h_input;
+
     // Allocate memory for caches
     allocate_memory(batch_size);
     
@@ -195,6 +206,17 @@ void FullyConnectedLayer::forward(const float* d_input, float* d_output, int bat
         d_output_cache, batch_size, in_features, num_classes
     );
     CHECK_LAST_CUDA_ERROR();
+
+
+    // Debug: Check FC output
+    float* h_fc_output = new float[batch_size * num_classes];
+    cudaMemcpy(h_fc_output, d_output_cache, batch_size * num_classes * sizeof(float), cudaMemcpyDeviceToHost);
+    std::cout << "FC output first sample: ";
+    for(int i = 0; i < num_classes; i++) {
+        std::cout << h_fc_output[i] << " ";
+    }
+    std::cout << std::endl;
+    delete[] h_fc_output;
     
     // Softmax
     softmax_kernel<<<batch_size, 1>>>(
@@ -202,6 +224,16 @@ void FullyConnectedLayer::forward(const float* d_input, float* d_output, int bat
         batch_size, num_classes
     );
     CHECK_LAST_CUDA_ERROR();
+
+    // Debug: Check softmax output
+    float* h_softmax = new float[batch_size * num_classes];
+    cudaMemcpy(h_softmax, d_output, batch_size * num_classes * sizeof(float), cudaMemcpyDeviceToHost);
+    std::cout << "Softmax output first sample: ";
+    for(int i = 0; i < num_classes; i++) {
+        std::cout << h_softmax[i] << " ";
+    }
+    std::cout << std::endl;
+    delete[] h_softmax;
     
     // Cache softmax output
     CHECK_CUDA_ERROR(cudaMemcpy(d_output_cache, d_output, 
