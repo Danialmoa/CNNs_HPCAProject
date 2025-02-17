@@ -29,7 +29,8 @@ __global__ void adam_update_kernel(
     float update = lr * m_hat / (sqrtf(v_hat) + epsilon);
     
     // Clip updates to prevent explosion
-    update = fmaxf(fminf(update, 1.0f), -1.0f);
+    const float max_grad_norm = 1.0f;
+    update = fmaxf(fminf(update, max_grad_norm), -max_grad_norm);
     
     params[idx] -= update;
 }

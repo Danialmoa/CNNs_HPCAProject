@@ -86,7 +86,7 @@ __global__ void backward_kernel(
     if (b >= batch_size || c >= num_classes) return;
     
     int idx = b * num_classes + c;
-    float grad = (softmax_output[idx] - labels[idx]);
+    float grad = (softmax_output[idx] - labels[idx]) / batch_size;
 
     const float CLIP_VALUE = 1.0f;
     grad = fmaxf(fminf(grad, CLIP_VALUE), -CLIP_VALUE);
@@ -95,11 +95,11 @@ __global__ void backward_kernel(
     atomicAdd(&grad_biases[c], grad);
     
     // Gradient for weights and inputs
+    const float l2_reg = 0.0001f;  // L2 regularization strength
     for (int i = 0; i < in_features; i++) {
-        atomicAdd(&grad_weights[c * in_features + i], 
-                 input_cache[b * in_features + i] * grad);
-        atomicAdd(&grad_input[b * in_features + i], 
-                 weights[c * in_features + i] * grad);
+        float weight_grad = input_cache[b * in_features + i] * grad + l2_reg * weights[c * in_features + i];
+        atomicAdd(&grad_weights[c * in_features + i], weight_grad);
+        atomicAdd(&grad_input[b * in_features + i], weights[c * in_features + i] * grad);
     }
 }
 

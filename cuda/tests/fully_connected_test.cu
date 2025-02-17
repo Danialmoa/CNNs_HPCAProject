@@ -56,7 +56,7 @@ int main() {
             for (int b = 0; b < batch_size; b++) {
                 for (int f = 0; f < in_features; f++) {
                     int idx = b * in_features + f;
-                    h_input[idx] = (float)(f % 5) * 0.1f + epoch * 0.01f;  // Simple pattern
+                    h_input[idx] = (float)(f % 5) * 0.1f + epoch * 0.01f;  
                 }
             }
 

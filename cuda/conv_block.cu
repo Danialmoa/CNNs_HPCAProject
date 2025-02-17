@@ -220,10 +220,17 @@ __global__ void conv_backward_kernel(
         h >= out_height || w >= out_width) return;
     
     int out_idx = ((batch * out_channels + out_ch) * out_height + h) * out_width + w;
-    float grad = grad_output[out_idx];
+    float grad = grad_output[out_idx] / batch_size;
     
+    // Clip gradients 
+    const float CLIP_VALUE = 5.0f;
+    grad = fmaxf(fminf(grad, CLIP_VALUE), -CLIP_VALUE);
+
     // Accumulate bias gradients
     atomicAdd(&grad_biases[out_ch], grad);
+
+    // L2 regularization coefficient
+    const float l2_reg = 0.0001f;
     
     // Compute gradients for weights and input
     for (int in_ch = 0; in_ch < in_channels; in_ch++) {
@@ -233,13 +240,11 @@ __global__ void conv_backward_kernel(
                 int w_in = w * stride - padding + kw;
                 
                 if (h_in >= 0 && h_in < height && w_in >= 0 && w_in < width) {
-                    // Input index
                     int in_idx = ((batch * in_channels + in_ch) * height + h_in) * width + w_in;
-                    // Weight index
                     int weight_idx = ((out_ch * in_channels + in_ch) * kernel_size + kh) * kernel_size + kw;
-                    
+                    float weight_grad = input[in_idx] * grad + l2_reg * weights[weight_idx];
                     // Gradient w.r.t. weights
-                    atomicAdd(&grad_weights[weight_idx], input[in_idx] * grad);
+                    atomicAdd(&grad_weights[weight_idx], weight_grad);
                     
                     // Gradient w.r.t. input
                     atomicAdd(&grad_input[in_idx], weights[weight_idx] * grad);
