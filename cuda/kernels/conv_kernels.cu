@@ -23,62 +23,35 @@ __global__ void conv_forward_kernel(
     const int ty = threadIdx.y;
     const int x = blockIdx.x * blockDim.x + tx;
     const int y = blockIdx.y * blockDim.y + ty;
-    const int out_ch = blockIdx.z % out_channels;
-    const int batch = blockIdx.z / out_channels;
     
-    if (x >= out_width || y >= out_height || out_ch >= out_channels || batch >= batch_size) return;
+    if (x >= out_width || y >= out_height) return;
     
-    // Calculate shared memory layout
-    float* shared_input = shared_mem;
-    float* shared_weights = shared_input + (blockDim.y + kernel_size - 1) * (blockDim.x + kernel_size - 1);
+    // Initialize output value
+    float sum = (biases != nullptr) ? biases[0] : 0.0f;
     
-    float sum = biases[out_ch];
+    // Compute input window boundaries
+    const int start_h = y * stride - padding;
+    const int start_w = x * stride - padding;
     
-    // Load input tiles into shared memory
-    for (int in_ch = 0; in_ch < in_channels; in_ch++) {
-        // Load input patch into shared memory
-        const int tile_h = blockDim.y + kernel_size - 1;
-        const int tile_w = blockDim.x + kernel_size - 1;
+    // Compute convolution
+    for (int kh = 0; kh < kernel_size; kh++) {
+        int in_h = start_h + kh;
         
-        for (int i = ty; i < tile_h; i += blockDim.y) {
-            for (int j = tx; j < tile_w; j += blockDim.x) {
-                int h_in = blockIdx.y * blockDim.y + i - padding;
-                int w_in = blockIdx.x * blockDim.x + j - padding;
-                
-                float val = 0.0f;
-                if (h_in >= 0 && h_in < height && w_in >= 0 && w_in < width) {
-                    val = input[((batch * in_channels + in_ch) * height + h_in) * width + w_in];
-                }
-                shared_input[i * tile_w + j] = val;
+        for (int kw = 0; kw < kernel_size; kw++) {
+            int in_w = start_w + kw;
+            
+            if (in_h >= 0 && in_h < height && in_w >= 0 && in_w < width) {
+                float in_val = input[in_h * width + in_w];
+                float weight_val = weights[kh * kernel_size + kw];
+                sum += in_val * weight_val;
             }
         }
-        
-        // Load weights into shared memory
-        for (int i = ty; i < kernel_size; i += blockDim.y) {
-            for (int j = tx; j < kernel_size; j += blockDim.x) {
-                if (i < kernel_size && j < kernel_size) {
-                    shared_weights[i * kernel_size + j] = 
-                        weights[((out_ch * in_channels + in_ch) * kernel_size + i) * kernel_size + j];
-                }
-            }
-        }
-        
-        __syncthreads();
-        
-        // Compute convolution using shared memory
-        for (int kh = 0; kh < kernel_size; kh++) {
-            for (int kw = 0; kw < kernel_size; kw++) {
-                int h_offset = ty * stride + kh;
-                int w_offset = tx * stride + kw;
-                sum += shared_input[h_offset * (blockDim.x + kernel_size - 1) + w_offset] * 
-                       shared_weights[kh * kernel_size + kw];
-            }
-        }
-        
-        __syncthreads();
     }
     
-    output[((batch * out_channels + out_ch) * out_height + y) * out_width + x] = sum;
+    // Write output
+    if (x < out_width && y < out_height) {
+        output[y * out_width + x] = sum;
+    }
 }
 
 __global__ void conv_backward_kernel(

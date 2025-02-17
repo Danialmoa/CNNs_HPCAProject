@@ -39,10 +39,13 @@ void test_simple_convolution() {
         ((BLOCK_SIZE + 3 - 1) * (BLOCK_SIZE + 3 - 1) + 3 * 3) * sizeof(float);
     
     // Launch kernel
-    dim3 block(2, 2);
-    dim3 grid(1, 1, 1);  // One block for this small example
+    dim3 block(16, 16);  // Use a 16x16 block
+    dim3 grid(
+        (out_width + block.x - 1) / block.x,
+        (out_height + block.y - 1) / block.y
+    );
     
-    conv_forward_kernel<<<grid, block, shared_mem_size>>>(
+    conv_forward_kernel<<<grid, block>>>(
         d_input,         // input
         d_kernel,        // weights
         nullptr,         // no bias
