@@ -1,4 +1,4 @@
-#include "include/kernels/pooling_kernels.cuh"
+#include "../include/kernels/pooling_kernels.cuh"
 
 __global__ void max_pool_kernel(
     const float* input,

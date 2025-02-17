@@ -57,3 +57,13 @@ void test_simple_maxpool() {
     cudaFree(d_output);
     cudaFree(d_indices);
 }
+
+int main() {
+    try {
+        test_simple_maxpool();
+    } catch (const std::exception& e) {
+        std::cerr << "Error: " << e.what() << std::endl;
+        return 1;
+    }
+    return 0;
+}
