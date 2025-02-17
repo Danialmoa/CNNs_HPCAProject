@@ -20,9 +20,6 @@ private:
     AdamOptimizer weights_optimizer;
     AdamOptimizer bias_optimizer;
     
-    cudaStream_t stream1, stream2, stream3;
-    bool streams_initialized;
-
     // Helper functions
     void allocate_memory(int batch_size);
     void free_memory();
