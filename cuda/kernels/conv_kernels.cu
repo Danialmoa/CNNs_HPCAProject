@@ -1,4 +1,4 @@
-#include "include/kernels/conv_kernels.cuh"
+#include "../include/kernels/conv_kernels.cuh"
 
 __global__ void conv_forward_kernel(
     const float* input,
@@ -141,4 +141,14 @@ __global__ void conv_backward_kernel(
             }
         }
     }
+}
+
+int main() {
+    try {
+        test_simple_conv();
+    } catch (const std::exception& e) {
+        std::cerr << "Error: " << e.what() << std::endl;
+        return 1;
+    }
+    return 0;
 }
