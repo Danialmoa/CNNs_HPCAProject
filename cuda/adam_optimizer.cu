@@ -25,16 +25,22 @@ __global__ void adam_update_kernel(
     // Compute bias-corrected second raw moment estimate
     float v_hat = v[idx] / (1.0f - beta2_t);
     
-    // Update parameters with stricter gradient clipping
-    const float max_grad_norm = 0.1f;  // Reduced from 1.0f
+    // Update parameters with PyTorch-style update
     float update = lr * m_hat / (sqrtf(v_hat) + epsilon);
+    
+    // Global gradient clipping (PyTorch default is typically higher)
+    const float max_grad_norm = 1.0f;
     update = fmaxf(fminf(update, max_grad_norm), -max_grad_norm);
     
     params[idx] -= update;
 }
 
 AdamOptimizer::AdamOptimizer(float lr, float b1, float b2, float eps)
-    : learning_rate(lr), beta1(b1), beta2(b2), epsilon(eps), t(0),
+    : learning_rate(lr), 
+      beta1(b1 == 0.0f ? 0.9f : b1),     // PyTorch default: 0.9
+      beta2(b2 == 0.0f ? 0.999f : b2),   // PyTorch default: 0.999
+      epsilon(eps == 0.0f ? 1e-8f : eps), // PyTorch default: 1e-8
+      t(0),
       d_m(nullptr), d_v(nullptr), param_size(0) {}
 
 AdamOptimizer::~AdamOptimizer() {
