@@ -1,4 +1,4 @@
-#include "include/kernels/batchnorm_kernels.cuh"
+#include "../include/kernels/batchnorm_kernels.cuh"
 
 __global__ void batch_norm_forward_kernel(
     float* input,

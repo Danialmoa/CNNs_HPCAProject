@@ -75,3 +75,13 @@ void test_simple_batchnorm() {
     cudaFree(d_batch_mean);
     cudaFree(d_batch_var);
 }
+
+int main() {
+    try {
+        test_simple_batchnorm();
+    } catch (const std::exception& e) {
+        std::cerr << "Error: " << e.what() << std::endl;
+        return 1;
+    }
+    return 0;
+}
