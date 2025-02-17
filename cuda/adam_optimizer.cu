@@ -25,11 +25,9 @@ __global__ void adam_update_kernel(
     // Compute bias-corrected second raw moment estimate
     float v_hat = v[idx] / (1.0f - beta2_t);
     
-    // Update parameters
+    // Update parameters with stricter gradient clipping
+    const float max_grad_norm = 0.1f;  // Reduced from 1.0f
     float update = lr * m_hat / (sqrtf(v_hat) + epsilon);
-    
-    // Clip updates to prevent explosion
-    const float max_grad_norm = 1.0f;
     update = fmaxf(fminf(update, max_grad_norm), -max_grad_norm);
     
     params[idx] -= update;
