@@ -29,14 +29,14 @@ void test_simple_convolution() {
     };
     
     // Kernel: [out_channels, in_channels, kernel_size, kernel_size]
-    float kernel[9] = {
+    const float kernel[9] = {
         1, 0, -1,
         2, 0, -2,
         1, 0, -1
     };
     
     // Expected output: [batch_size, out_channels, out_height, out_width]
-    float expected_output[4] = {
+    const float expected_output[4] = {
         8, -8,
         8, -8
     };
@@ -53,6 +53,17 @@ void test_simple_convolution() {
     // Copy data to device
     cudaMemcpy(d_input, input, batch_size * in_channels * height * width * sizeof(float), cudaMemcpyHostToDevice);
     cudaMemcpy(d_kernel, kernel, out_channels * in_channels * kernel_size * kernel_size * sizeof(float), cudaMemcpyHostToDevice);
+    
+    // Verify kernel values after copy
+    float kernel_verify[9];
+    cudaMemcpy(kernel_verify, d_kernel, 9 * sizeof(float), cudaMemcpyDeviceToHost);
+    std::cout << "\nVerifying kernel values after copy to device:\n";
+    for (int i = 0; i < 9; i++) {
+        if (kernel[i] != kernel_verify[i]) {
+            std::cout << "Kernel value mismatch at " << i << ": expected " 
+                      << kernel[i] << ", got " << kernel_verify[i] << "\n";
+        }
+    }
     
     // Launch kernel
     dim3 block(8, 8);
