@@ -62,7 +62,7 @@ int main() {
         
         // Get first image and its label
         float* image = new float[3 * 32 * 32];
-        float* label = new float[10];  
+        uint8_t* label = new uint8_t[10];  
 
         dataset.get_batch_data(image, label, 0, 1);
         
