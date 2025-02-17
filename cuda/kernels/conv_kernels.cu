@@ -16,43 +16,36 @@ __global__ void conv_forward_kernel(
     int out_height,
     int out_width
 ) {
-    // Get output position
     const int x = blockIdx.x * blockDim.x + threadIdx.x;
     const int y = blockIdx.y * blockDim.y + threadIdx.y;
-    const int n = blockIdx.z / out_channels;  // batch index
-    const int c_out = blockIdx.z % out_channels;  // output channel index
+    const int n = blockIdx.z / out_channels;
+    const int c_out = blockIdx.z % out_channels;
     
     if (x >= out_width || y >= out_height || n >= batch_size) return;
     
-    // Initialize accumulator
     float sum = biases ? biases[c_out] : 0.0f;
     
-    // Center of the kernel
-    const int kernel_center = kernel_size / 2;
+    // Compute the input starting position
+    const int start_h = y * stride - padding;
+    const int start_w = x * stride - padding;
     
     // Compute convolution
     for (int c_in = 0; c_in < in_channels; c_in++) {
         for (int kh = 0; kh < kernel_size; kh++) {
+            const int in_h = start_h + kh;
+            
             for (int kw = 0; kw < kernel_size; kw++) {
-                // Input position
-                const int in_h = y - kernel_center + kh;
-                const int in_w = x - kernel_center + kw;
+                const int in_w = start_w + kw;
                 
-                // Check boundaries
                 if (in_h >= 0 && in_h < height && in_w >= 0 && in_w < width) {
-                    // Input index: [n, c_in, h, w]
                     const int in_idx = ((n * in_channels + c_in) * height + in_h) * width + in_w;
-                    
-                    // Weight index: [c_out, c_in, kh, kw]
-                    const int w_idx = ((c_out * in_channels + c_in) * kernel_size + kh) * kernel_size + kw;
-                    
+                    const int w_idx = ((c_out * in_channels + c_in) * kernel_size + (kernel_size-1-kh)) * kernel_size + (kernel_size-1-kw);
                     sum += input[in_idx] * weights[w_idx];
                 }
             }
         }
     }
     
-    // Output index: [n, c_out, h, w]
     const int out_idx = ((n * out_channels + c_out) * out_height + y) * out_width + x;
     output[out_idx] = sum;
 }
