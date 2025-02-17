@@ -74,7 +74,7 @@ int main() {
         std::cout << "Number of SMs: " << prop.multiProcessorCount << std::endl;
 
         // Training hyperparameters
-        const std::vector<int> batch_sizes = {128};
+        const std::vector<int> batch_sizes = {64};
         const int num_epochs = 1;
         const float learning_rate = 0.001f;
         
@@ -113,7 +113,7 @@ int main() {
             const int conv1_output_size = batch_size * 32 * 16 * 16;
             const int conv2_output_size = batch_size * 64 * 8 * 8;
             const int conv3_output_size = batch_size * 128 * 4 * 4;
-            
+
             const int fc_output_size = batch_size * 10;
             const int fc_grad_size = batch_size * 128 * 4 * 4;
             
