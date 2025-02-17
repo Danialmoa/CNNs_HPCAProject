@@ -13,7 +13,11 @@ ConvBlock::ConvBlock(int in_ch, int out_ch, int k_size,
     : in_channels(in_ch), out_channels(out_ch), kernel_size(k_size),
       stride(s), padding(p), pool_size(pool_s), pool_stride(pool_str),
       learning_rate(lr), current_batch_size(0), streams_initialized(false),
-      bn_epsilon(1e-5), bn_momentum(0.1), is_training(true) {
+      bn_epsilon(1e-5), bn_momentum(0.1), is_training(true),
+      d_cache(nullptr), d_conv_output_cache(nullptr), d_pool_indices(nullptr),
+      d_weights(nullptr), d_biases(nullptr), d_gamma(nullptr), d_beta(nullptr),
+      d_running_mean(nullptr), d_running_var(nullptr),
+      d_batch_mean(nullptr), d_batch_var(nullptr) {
     
     init_weights_and_optimizers();
     init_streams();
@@ -39,6 +43,7 @@ void ConvBlock::forward(const float* d_input, float* d_output,
               << conv_output_height << "x" << conv_output_width << std::endl;
     std::cout << "Pool output shape: " << batch_size << "x" << out_channels << "x" 
               << pool_output_height << "x" << pool_output_width << std::endl;
+
 
     // Allocate memory if needed
     allocate_memory(batch_size);
