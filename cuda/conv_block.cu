@@ -481,96 +481,67 @@ void ConvBlock::init_weights_and_optimizers() {
 }
 
 // Forward pass
-void ConvBlock::forward(const float* d_input, float* d_output, 
-                       int batch_size, int height, int width) {
-    // Initialize streams if not already done
-    if (!streams_initialized) {
-        init_streams();
-    }
-
-    // Set dimensions
+void ConvBlock::forward(const float* d_input, float* d_output, int batch_size, int height, int width) {
+    // Store dimensions for backward pass
     input_height = height;
     input_width = width;
+    current_batch_size = batch_size;
+    
+    // Calculate output dimensions
     conv_output_height = (height + 2 * padding - kernel_size) / stride + 1;
     conv_output_width = (width + 2 * padding - kernel_size) / stride + 1;
     pool_output_height = (conv_output_height - pool_size) / pool_stride + 1;
     pool_output_width = (conv_output_width - pool_size) / pool_stride + 1;
-    
-    if (batch_size != current_batch_size) {
-        allocate_memory(batch_size);
-    }
+
+    // Allocate memory if needed
+    allocate_memory(batch_size);
 
     // Cache input for backward pass
-    size_t input_size = batch_size * in_channels * height * width * sizeof(float);
-    CHECK_CUDA_ERROR(cudaMemcpy(d_cache, d_input, input_size, cudaMemcpyDeviceToDevice));
+    CHECK_CUDA_ERROR(cudaMemcpy(d_cache, d_input, 
+        batch_size * in_channels * height * width * sizeof(float), 
+        cudaMemcpyDeviceToDevice));
 
-    // Ensure batch_size is divisible by number of streams
-    int streams_count = 3;
-    int stream_batch_size = (batch_size + streams_count - 1) / streams_count;
+    // Convolution forward pass
+    dim3 conv_block(16, 16);
+    dim3 conv_grid(
+        (conv_output_width + conv_block.x - 1) / conv_block.x,
+        (conv_output_height + conv_block.y - 1) / conv_block.y,
+        batch_size * out_channels
+    );
 
-    dim3 threadsPerBlock(16, 16);
-    
-    // Calculate shared memory size
-    size_t shared_mem_size = (
-        (threadsPerBlock.x + kernel_size - 1) * (threadsPerBlock.y + kernel_size - 1) +
-        kernel_size * kernel_size
-    ) * sizeof(float);
+    size_t conv_shared_mem_size = 
+        ((conv_block.y + kernel_size - 1) * (conv_block.x + kernel_size - 1) + 
+         kernel_size * kernel_size) * sizeof(float);
 
-    // Check shared memory size against device limit
-    cudaDeviceProp prop;
-    cudaGetDeviceProperties(&prop, 0);
-    if (shared_mem_size > prop.sharedMemPerBlock) {
-        throw std::runtime_error("Shared memory size exceeds device limit");
-    }
+    conv_forward_kernel<<<conv_grid, conv_block, conv_shared_mem_size>>>(
+        d_input,
+        d_weights,
+        d_biases,
+        d_conv_output_cache,
+        batch_size,
+        in_channels,
+        out_channels,
+        height,
+        width,
+        kernel_size,
+        stride,
+        padding,
+        conv_output_height,
+        conv_output_width
+    );
+    CHECK_LAST_CUDA_ERROR();
 
-    // Process batches in streams
-    for (int i = 0; i < streams_count; i++) {
-        int start_batch = i * stream_batch_size;
-        int current_batch_size = std::min(stream_batch_size, batch_size - start_batch);
-        
-        if (current_batch_size <= 0) continue;
-
-        dim3 numBlocks(
-            (conv_output_width + threadsPerBlock.x - 1) / threadsPerBlock.x,
-            (conv_output_height + threadsPerBlock.y - 1) / threadsPerBlock.y,
-            current_batch_size * out_channels
-        );
-
-        cudaStream_t current_stream = (i == 0) ? stream1 : (i == 1) ? stream2 : stream3;
-
-        conv_forward_kernel<<<numBlocks, threadsPerBlock, shared_mem_size, current_stream>>>(
-            d_input + start_batch * in_channels * height * width,
-            d_weights,
-            d_biases,
-            d_conv_output_cache + start_batch * out_channels * conv_output_height * conv_output_width,
-            current_batch_size,
-            in_channels,
-            out_channels,
-            height,
-            width,
-            kernel_size,
-            stride,
-            padding,
-            conv_output_height,
-            conv_output_width
-        );
-        CHECK_LAST_CUDA_ERROR();
-    }
-
-    // Synchronize after convolution
-    cudaDeviceSynchronize();
-
-    // Launch batch norm with better parallelization
-    dim3 threads(16, 16);
-    dim3 blocks(
-        (conv_output_width + threads.x - 1) / threads.x,
-        (conv_output_height + threads.y - 1) / threads.y,
+    // Batch normalization
+    dim3 bn_threads(16, 16);
+    dim3 bn_blocks(
+        (conv_output_width + bn_threads.x - 1) / bn_threads.x,
+        (conv_output_height + bn_threads.y - 1) / bn_threads.y,
         out_channels
     );
     
-    size_t shared_mem_size = 2 * threads.x * threads.y * sizeof(float);
+    size_t bn_shared_mem_size = 2 * bn_threads.x * bn_threads.y * sizeof(float);
     
-    batch_norm_forward_kernel<<<blocks, threads, shared_mem_size>>>(
+    batch_norm_forward_kernel<<<bn_blocks, bn_threads, bn_shared_mem_size>>>(
         d_conv_output_cache,
         d_gamma,
         d_beta,
@@ -588,25 +559,26 @@ void ConvBlock::forward(const float* d_input, float* d_output,
     );
     CHECK_LAST_CUDA_ERROR();
 
-    // ReLU and pooling can be done on the entire batch at once
-    const int total_conv_elements = batch_size * out_channels * conv_output_height * conv_output_width;
-    const int relu_threads = 256;
-    const int relu_blocks = (total_conv_elements + relu_threads - 1) / relu_threads;
+    // ReLU
+    const int total_elements = batch_size * out_channels * conv_output_height * conv_output_width;
+    const int block_size = 256;
+    const int num_blocks = (total_elements + block_size - 1) / block_size;
     
-    relu_kernel<<<relu_blocks, relu_threads>>>(
+    relu_kernel<<<num_blocks, block_size>>>(
         d_conv_output_cache,
-        total_conv_elements
+        total_elements
     );
     CHECK_LAST_CUDA_ERROR();
 
-    dim3 poolThreads(16, 16);
-    dim3 poolBlocks(
-        (pool_output_width + poolThreads.x - 1) / poolThreads.x,
-        (pool_output_height + poolThreads.y - 1) / poolThreads.y,
+    // Max pooling
+    dim3 pool_block(16, 16);
+    dim3 pool_grid(
+        (pool_output_width + pool_block.x - 1) / pool_block.x,
+        (pool_output_height + pool_block.y - 1) / pool_block.y,
         batch_size * out_channels
     );
 
-    max_pool_kernel<<<poolBlocks, poolThreads>>>(
+    max_pool_kernel<<<pool_grid, pool_block>>>(
         d_conv_output_cache,
         d_output,
         d_pool_indices,
