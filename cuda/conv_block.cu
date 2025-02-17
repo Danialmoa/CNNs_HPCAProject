@@ -296,10 +296,20 @@ void ConvBlock::allocate_memory(int batch_size) {
     size_t conv_output_size = batch_size * out_channels * conv_output_height * conv_output_width;
     size_t pool_indices_size = batch_size * out_channels * pool_output_height * pool_output_width;
 
-    std::cout << "Allocating ConvBlock memory:" << std::endl;
-    std::cout << "Input size: " << input_size << std::endl;
-    std::cout << "Conv output size: " << conv_output_size << std::endl;
-    std::cout << "Pool indices size: " << pool_indices_size << std::endl;
+    // Calculate memory requirements in MB
+    float input_mb = (input_size * sizeof(float)) / (1024.0f * 1024.0f);
+    float conv_output_mb = (conv_output_size * sizeof(float)) / (1024.0f * 1024.0f);
+    float pool_indices_mb = (pool_indices_size * sizeof(int)) / (1024.0f * 1024.0f);
+
+    size_t free_memory, total_memory;
+    cudaMemGetInfo(&free_memory, &total_memory);
+
+    std::cout << "ConvBlock memory requirements:" << std::endl;
+    std::cout << "Input cache: " << input_mb << " MB" << std::endl;
+    std::cout << "Conv output cache: " << conv_output_mb << " MB" << std::endl;
+    std::cout << "Pool indices: " << pool_indices_mb << " MB" << std::endl;
+    std::cout << "Available GPU memory: " << (free_memory / 1024.0f / 1024.0f) << " MB" << std::endl;
+
 
     // Allocate memory
     CHECK_CUDA_ERROR(cudaMalloc(&d_cache, input_size * sizeof(float)));
