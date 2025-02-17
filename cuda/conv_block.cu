@@ -5,6 +5,7 @@
 #include "include/kernels/batchnorm_kernels.cuh"
 #include <random>
 #include <cmath>
+#include <iostream>
 
 ConvBlock::ConvBlock(int in_ch, int out_ch, int k_size, 
                      int s, int p, int pool_s, int pool_str, 
