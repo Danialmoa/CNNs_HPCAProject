@@ -9,12 +9,27 @@ void test_simple_batchnorm() {
         5.0f, 6.0f, 7.0f, 8.0f     // Second batch
     };
     
+    // Print input data for verification
+    std::cout << "Input Data:\n";
+    for (int b = 0; b < 2; b++) {
+        std::cout << "Batch " << b + 1 << ":\n";
+        for (int c = 0; c < 2; c++) {
+            std::cout << "Channel " << c + 1 << ": ";
+            for (int i = 0; i < 4; i++) {
+                int idx = (b * 2 + c) * 4 + i;
+                std::cout << input[idx] << " ";
+            }
+            std::cout << "\n";
+        }
+    }
+    std::cout << "\n";
+
     float gamma[2] = {1.0f, 1.0f};
     float beta[2] = {0.0f, 0.0f};
     float running_mean[2] = {0.0f, 0.0f};
     float running_var[2] = {1.0f, 1.0f};
     
-    // Allocate device memory
+    // Allocate and initialize device memory
     float *d_input, *d_gamma, *d_beta, *d_running_mean, *d_running_var;
     float *d_batch_mean, *d_batch_var;
     
@@ -25,6 +40,10 @@ void test_simple_batchnorm() {
     cudaMalloc(&d_running_var, 2 * sizeof(float));
     cudaMalloc(&d_batch_mean, 2 * sizeof(float));
     cudaMalloc(&d_batch_var, 2 * sizeof(float));
+
+    // Initialize batch statistics to zero
+    cudaMemset(d_batch_mean, 0, 2 * sizeof(float));
+    cudaMemset(d_batch_var, 0, 2 * sizeof(float));
     
     // Copy data to device
     cudaMemcpy(d_input, input, 16 * sizeof(float), cudaMemcpyHostToDevice);
@@ -33,7 +52,7 @@ void test_simple_batchnorm() {
     cudaMemcpy(d_running_mean, running_mean, 2 * sizeof(float), cudaMemcpyHostToDevice);
     cudaMemcpy(d_running_var, running_var, 2 * sizeof(float), cudaMemcpyHostToDevice);
     
-    // Launch kernel with correct configuration
+    // Launch kernel
     const int threadsPerBlock = 256;
     size_t shared_mem_size = 2 * threadsPerBlock * sizeof(float);
     
@@ -66,11 +85,14 @@ void test_simple_batchnorm() {
     cudaMemcpy(batch_mean, d_batch_mean, 2 * sizeof(float), cudaMemcpyDeviceToHost);
     cudaMemcpy(batch_var, d_batch_var, 2 * sizeof(float), cudaMemcpyDeviceToHost);
     
-    // Print results
+    // Print results with expected values
     std::cout << "BatchNorm Test Results:\n";
-    std::cout << "Channel 1 Mean: " << batch_mean[0] << " Var: " << batch_var[0] << "\n";
-    std::cout << "Channel 2 Mean: " << batch_mean[1] << " Var: " << batch_var[1] << "\n";
-    std::cout << "\nNormalized Output:\n";
+    std::cout << "Channel 1 (Expected Mean: 2.5, Var: 1.25):\n";
+    std::cout << "Actual Mean: " << batch_mean[0] << " Var: " << batch_var[0] << "\n";
+    std::cout << "Channel 2 (Expected Mean: 6.5, Var: 1.25):\n";
+    std::cout << "Actual Mean: " << batch_mean[1] << " Var: " << batch_var[1] << "\n\n";
+    
+    std::cout << "Normalized Output:\n";
     for (int b = 0; b < 2; b++) {
         std::cout << "Batch " << b + 1 << ":\n";
         for (int c = 0; c < 2; c++) {
