@@ -76,7 +76,7 @@ int main() {
         // Training hyperparameters
         const std::vector<int> batch_sizes = {128};
         const int num_epochs = 1;
-        const float learning_rate = 0.005f;
+        const float learning_rate = 0.0001f;
         
         // Initialize dataset
         std::cout << "Initializing dataset..." << std::endl;
@@ -156,19 +156,17 @@ int main() {
                     // Compute loss and accuracy
                     float batch_loss = fc.compute_loss(d_batch_labels, batch_size);
                     float batch_accuracy = calculate_accuracy(d_fc_output, d_batch_labels, batch_size);
-                    std::cout << "Batch " << batch + 1 << "/" << num_batches << " - Loss: " << batch_loss << " - Accuracy: " << batch_accuracy * 100 << "%" << std::endl;
+                    
                     epoch_loss += batch_loss;
                     epoch_accuracy += batch_accuracy;
-                    cudaMemGetInfo(&free_memory, &total_memory);
-                    std::cout << "Available GPU memory: " << free_memory / 1024 / 1024 << "MB" << std::endl;
-                
+
                     // Backward pass
                     fc.backward(d_batch_labels, d_grad_fc_output, batch_size);
                     conv3.backward(d_grad_fc_output, d_grad_conv_3_output, batch_size, 4, 4);
                     conv2.backward(d_grad_conv_3_output, d_grad_conv_2_output, batch_size, 8, 8);
                     conv1.backward(d_grad_conv_2_output, d_grad_conv_1_output, batch_size, 16, 16);
 
-                    
+                    // Synchronize streams
                     CHECK_CUDA_ERROR(cudaDeviceSynchronize());
 
                 }
