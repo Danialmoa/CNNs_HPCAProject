@@ -33,14 +33,41 @@ void test_simple_convolution() {
     cudaMemcpy(d_input, input, 16 * sizeof(float), cudaMemcpyHostToDevice);
     cudaMemcpy(d_kernel, kernel, 9 * sizeof(float), cudaMemcpyHostToDevice);
     
+    // Calculate shared memory size
+    const int BLOCK_SIZE = 16;
+    size_t shared_mem_size = 
+        ((BLOCK_SIZE + 3 - 1) * (BLOCK_SIZE + 3 - 1) + 3 * 3) * sizeof(float);
+    
     // Launch kernel
     dim3 block(2, 2);
-    dim3 grid(1, 1, 1);
+    dim3 grid(1, 1, 1);  // One block for this small example
     
-    conv_forward_kernel<<<grid, block>>>(
-        d_input, d_kernel, nullptr,  // no bias
-        d_output, 1, 1, 1, 4, 4, 3, 1, 0, 2, 2
+    conv_forward_kernel<<<grid, block, shared_mem_size>>>(
+        d_input,         // input
+        d_kernel,        // weights
+        nullptr,         // no bias
+        d_output,        // output
+        1,              // batch_size
+        1,              // in_channels
+        1,              // out_channels
+        4,              // height
+        4,              // width
+        3,              // kernel_size
+        1,              // stride
+        1,              // padding
+        2,              // out_height
+        2               // out_width
     );
+    
+    // Check for errors
+    cudaError_t err = cudaGetLastError();
+    if (err != cudaSuccess) {
+        std::cerr << "CUDA Error: " << cudaGetErrorString(err) << std::endl;
+        return;
+    }
+    
+    // Synchronize device
+    cudaDeviceSynchronize();
     
     // Get results
     float output[4];
@@ -48,12 +75,29 @@ void test_simple_convolution() {
     
     // Print results
     std::cout << "Convolution Test Results:\n";
-    std::cout << "Expected:\t Actual:\n";
+    std::cout << "Expected:\tActual:\n";
     for (int i = 0; i < 2; i++) {
         for (int j = 0; j < 2; j++) {
             std::cout << expected_output[i*2 + j] << "\t\t" 
                       << output[i*2 + j] << "\n";
         }
+    }
+    
+    // Print input and kernel for verification
+    std::cout << "\nInput Matrix:\n";
+    for (int i = 0; i < 4; i++) {
+        for (int j = 0; j < 4; j++) {
+            std::cout << input[i*4 + j] << " ";
+        }
+        std::cout << "\n";
+    }
+    
+    std::cout << "\nKernel Matrix:\n";
+    for (int i = 0; i < 3; i++) {
+        for (int j = 0; j < 3; j++) {
+            std::cout << kernel[i*3 + j] << " ";
+        }
+        std::cout << "\n";
     }
     
     // Cleanup
