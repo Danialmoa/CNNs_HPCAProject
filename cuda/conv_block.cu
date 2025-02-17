@@ -283,21 +283,29 @@ void ConvBlock::init_streams() {
 }
 
 void ConvBlock::allocate_memory(int batch_size) {
-    if (batch_size != current_batch_size) {
-        // Free existing memory if needed
-        free_memory();
-
-        // Allocate new memory
-        size_t input_size = batch_size * in_channels * input_height * input_width;
-        size_t conv_output_size = batch_size * out_channels * 
-                                 conv_output_height * conv_output_width;
-
-        cudaMalloc(&d_cache, input_size * sizeof(float));
-        cudaMalloc(&d_conv_output_cache, conv_output_size * sizeof(float));
-        cudaMalloc(&d_pool_indices, conv_output_size * sizeof(int));
-
-        current_batch_size = batch_size;
+    if (current_batch_size == batch_size && d_conv_output_cache != nullptr) {
+        return;  // Memory already allocated with correct size
     }
+
+    // Free existing memory if any
+    free_memory();
+
+    // Calculate sizes
+    size_t input_size = batch_size * in_channels * input_height * input_width;
+    size_t conv_output_size = batch_size * out_channels * conv_output_height * conv_output_width;
+    size_t pool_indices_size = batch_size * out_channels * pool_output_height * pool_output_width;
+
+    std::cout << "Allocating ConvBlock memory:" << std::endl;
+    std::cout << "Input size: " << input_size << std::endl;
+    std::cout << "Conv output size: " << conv_output_size << std::endl;
+    std::cout << "Pool indices size: " << pool_indices_size << std::endl;
+
+    // Allocate memory
+    CHECK_CUDA_ERROR(cudaMalloc(&d_cache, input_size * sizeof(float)));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_conv_output_cache, conv_output_size * sizeof(float)));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_pool_indices, pool_indices_size * sizeof(int)));
+
+    current_batch_size = batch_size;
 }
 
 void ConvBlock::free_memory() {
