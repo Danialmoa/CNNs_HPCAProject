@@ -133,6 +133,8 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input,
     float* d_bn_grad = nullptr;
     float* d_weight_grad = nullptr;
     float* d_bias_grad = nullptr;
+    float* d_gamma_grad = nullptr;
+    float* d_beta_grad = nullptr;
     
     cudaMalloc(&d_pool_grad, batch_size * out_channels * conv_output_height * 
                conv_output_width * sizeof(float));
