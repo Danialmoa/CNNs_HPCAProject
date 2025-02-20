@@ -330,6 +330,7 @@ void ConvBlock::init_streams() {
 
 void ConvBlock::allocate_memory(int batch_size) {
     if (current_batch_size != batch_size || d_conv_output_cache == nullptr) {
+        std::cout << "Allocating memory" << std::endl;
         free_memory();
         
         // Calculate sizes
