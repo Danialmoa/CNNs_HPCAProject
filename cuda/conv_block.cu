@@ -34,7 +34,9 @@ ConvBlock::ConvBlock(int in_ch, int out_ch, int k_size,
       d_cache(nullptr), d_conv_output_cache(nullptr), d_pool_indices(nullptr),
       d_weights(nullptr), d_biases(nullptr), d_gamma(nullptr), d_beta(nullptr),
       d_running_mean(nullptr), d_running_var(nullptr),
-      d_batch_mean(nullptr), d_batch_var(nullptr) {
+      d_batch_mean(nullptr), d_batch_var(nullptr),
+      d_pool_grad(nullptr), d_relu_grad(nullptr), d_bn_grad(nullptr),
+      d_weight_grad(nullptr), d_bias_grad(nullptr) {
     
     init_weights_and_optimizers();
     init_streams();
@@ -126,35 +128,20 @@ void ConvBlock::forward(const float* d_input, float* d_output,
 
 void ConvBlock::backward(const float* d_grad_output, float* d_grad_input,
                         int batch_size, int height, int width) {
+    // Initialize gradients to zero
+    size_t conv_output_size = batch_size * out_channels * conv_output_height * conv_output_width;
+    CHECK_CUDA_ERROR(cudaMemset(d_pool_grad, 0, conv_output_size * sizeof(float)));
+    CHECK_CUDA_ERROR(cudaMemset(d_relu_grad, 0, conv_output_size * sizeof(float)));
+    CHECK_CUDA_ERROR(cudaMemset(d_bn_grad, 0, conv_output_size * sizeof(float)));
+    CHECK_CUDA_ERROR(cudaMemset(d_grad_input, 0, 
+        batch_size * in_channels * height * width * sizeof(float)));
 
     const float grad_scale = 1.0f / (batch_size * out_channels);
-    float* d_pool_grad = nullptr;
-    float* d_relu_grad = nullptr;
-    float* d_bn_grad = nullptr;
-    float* d_weight_grad = nullptr;
-    float* d_bias_grad = nullptr;
-    float* d_gamma_grad = nullptr;
-    float* d_beta_grad = nullptr;
-    
-    cudaMalloc(&d_pool_grad, batch_size * out_channels * conv_output_height * 
-               conv_output_width * sizeof(float));
-    cudaMalloc(&d_relu_grad, batch_size * out_channels * conv_output_height * 
-               conv_output_width * sizeof(float));
-    cudaMalloc(&d_bn_grad, batch_size * out_channels * conv_output_height * 
-               conv_output_width * sizeof(float));
     
     // 1. Max Pooling Backward
     dim3 pool_block(16, 16);
     dim3 pool_grid(batch_size, out_channels, 
                    pool_output_height * pool_output_width);
-
-    // Zero initialize gradients
-    cudaMemsetAsync(d_conv_output_cache, 0, 
-        batch_size * out_channels * conv_output_height * conv_output_width * sizeof(float),
-        stream1);
-    cudaMemsetAsync(d_grad_input, 0,
-        batch_size * in_channels * height * width * sizeof(float),
-        stream1);
 
     max_pool_backward_kernel<<<pool_grid, pool_block, 0, stream1>>>(
         d_grad_output,
@@ -172,15 +159,11 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input,
     cudaStreamSynchronize(stream1);
 
     // 2. ReLU Backward
-    const int total_elements = batch_size * out_channels * conv_output_height * conv_output_width;
-    const int block_size = 256;
-    const int num_blocks = (total_elements + block_size - 1) / block_size;
-
-    relu_backward_kernel<<<num_blocks, block_size, 0, stream2>>>(
+    relu_backward_kernel<<<conv_output_size, 256, 0, stream2>>>(
         d_pool_grad,  // Grad from pooling
         d_conv_output_cache,  // Forward output (cached)
         d_relu_grad,
-        total_elements
+        conv_output_size
     );
     cudaStreamSynchronize(stream2);
 
@@ -251,9 +234,6 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input,
     cudaStreamSynchronize(stream1);
     cudaStreamSynchronize(stream2);
     cudaStreamSynchronize(stream3);
-    cudaFree(d_pool_grad);
-    cudaFree(d_relu_grad);
-    cudaFree(d_bn_grad);
 }
 
 void ConvBlock::init_weights_and_optimizers() {
@@ -333,20 +313,25 @@ void ConvBlock::allocate_memory(int batch_size) {
     size_t conv_output_size = batch_size * out_channels * conv_output_height * conv_output_width;
     size_t pool_indices_size = batch_size * out_channels * pool_output_height * pool_output_width;
 
-    // Calculate memory requirements in MB
-    float input_mb = (input_size * sizeof(float)) / (1024.0f * 1024.0f);
-    float conv_output_mb = (conv_output_size * sizeof(float)) / (1024.0f * 1024.0f);
-    float pool_indices_mb = (pool_indices_size * sizeof(int)) / (1024.0f * 1024.0f);
-
-    // Allocate memory
+    // Allocate forward pass memory
     CHECK_CUDA_ERROR(cudaMalloc(&d_cache, input_size * sizeof(float)));
     CHECK_CUDA_ERROR(cudaMalloc(&d_conv_output_cache, conv_output_size * sizeof(float)));
     CHECK_CUDA_ERROR(cudaMalloc(&d_pool_indices, pool_indices_size * sizeof(int)));
+
+    // Allocate backward pass memory
+    CHECK_CUDA_ERROR(cudaMalloc(&d_pool_grad, conv_output_size * sizeof(float)));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_relu_grad, conv_output_size * sizeof(float)));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_bn_grad, conv_output_size * sizeof(float)));
+    
+    size_t weight_grad_size = out_channels * in_channels * kernel_size * kernel_size;
+    CHECK_CUDA_ERROR(cudaMalloc(&d_weight_grad, weight_grad_size * sizeof(float)));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_bias_grad, out_channels * sizeof(float)));
 
     current_batch_size = batch_size;
 }
 
 void ConvBlock::free_memory() {
+    // Free forward pass memory
     if (d_cache) {
         cudaFree(d_cache);
         d_cache = nullptr;
@@ -359,6 +344,30 @@ void ConvBlock::free_memory() {
         cudaFree(d_pool_indices);
         d_pool_indices = nullptr;
     }
+
+    // Free backward pass memory
+    if (d_pool_grad) {
+        cudaFree(d_pool_grad);
+        d_pool_grad = nullptr;
+    }
+    if (d_relu_grad) {
+        cudaFree(d_relu_grad);
+        d_relu_grad = nullptr;
+    }
+    if (d_bn_grad) {
+        cudaFree(d_bn_grad);
+        d_bn_grad = nullptr;
+    }
+    if (d_weight_grad) {
+        cudaFree(d_weight_grad);
+        d_weight_grad = nullptr;
+    }
+    if (d_bias_grad) {
+        cudaFree(d_bias_grad);
+        d_bias_grad = nullptr;
+    }
+
+    current_batch_size = 0;
 }
 
 ConvBlock::~ConvBlock() {
