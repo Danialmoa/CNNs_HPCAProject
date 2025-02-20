@@ -128,6 +128,11 @@ void ConvBlock::forward(const float* d_input, float* d_output,
 
 void ConvBlock::backward(const float* d_grad_output, float* d_grad_input,
                         int batch_size, int height, int width) {
+
+    if (batch_size != current_batch_size || height != input_height || width != input_width) {
+        std::cerr << "Error: Dimensions mismatch in backward pass" << std::endl;
+        return;
+    }
     // Initialize gradients to zero
     size_t conv_output_size = batch_size * out_channels * conv_output_height * conv_output_width;
     CHECK_CUDA_ERROR(cudaMemset(d_pool_grad, 0, conv_output_size * sizeof(float)));
