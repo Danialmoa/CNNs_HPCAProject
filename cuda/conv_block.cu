@@ -230,10 +230,9 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input,
     );
 
     const int total_params = out_channels * in_channels * kernel_size * kernel_size;
-    const int block_size = 256;
-    const int num_blocks = (total_params + block_size - 1) / block_size;
+    const int num_blocks_scale = (total_params + block_size - 1) / block_size;
 
-    scale_gradients<<<num_blocks, block_size, 0, stream3>>>(
+    scale_gradients<<<num_blocks_scale, block_size, 0, stream3>>>(
         d_weight_grad,
         d_bias_grad,
         grad_scale,
