@@ -281,6 +281,7 @@ void ConvBlock::init_weights_and_optimizers() {
         h_weights[i] = weight_dist(gen);
     }
     std::cout << "Allocating memory" << std::endl;
+
     CHECK_CUDA_ERROR(cudaMalloc(&d_weights, weights_size * sizeof(float)));
     CHECK_CUDA_ERROR(cudaMalloc(&d_biases, bias_size * sizeof(float)));
     CHECK_CUDA_ERROR(cudaMalloc(&d_weight_grad, weights_size * sizeof(float)));
@@ -301,6 +302,7 @@ void ConvBlock::init_weights_and_optimizers() {
     CHECK_CUDA_ERROR(cudaMemcpy(d_running_var, h_running_stats.data(), out_channels * sizeof(float), cudaMemcpyHostToDevice));
 
     // Initialize optimizers
+    std::cout << "Initializing optimizers" << std::endl;
     weights_optimizer = AdamOptimizer(weights_size, learning_rate);
     bias_optimizer = AdamOptimizer(bias_size, learning_rate);
     gamma_optimizer = AdamOptimizer(out_channels, learning_rate);
