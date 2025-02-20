@@ -218,7 +218,7 @@ void test_simple_convolution_backward() {
     );
     
     // Compute gradients
-    conv_backward_input_kernel<<<grid_input, block>>>(
+    conv_backward_kernel<<<grid_input, block>>>(
         d_grad_output,
         d_kernel,
         d_grad_input,
@@ -234,7 +234,7 @@ void test_simple_convolution_backward() {
         out_width
     );
     
-    conv_backward_kernel_kernel<<<grid_kernel, block>>>(
+    conv_backward_kernel<<<grid_kernel, block>>>(
         d_grad_output,
         d_input,
         d_grad_kernel,
