@@ -1,6 +1,7 @@
 #include "../include/kernels/conv_kernels.cuh"
 #include <iostream>
 
+
 void test_simple_convolution() {
     // Test parameters
     const int batch_size = 1;
@@ -112,12 +113,12 @@ void test_simple_convolution() {
     }
     
     std::cout << "\nConvolution Results:\n";
-    std::cout << "Expected:\tActual:\n";
-    for (int h = 0; h < out_height; h++) {
-        for (int w = 0; w < out_width; w++) {
-            int idx = h * out_width + w;
-            std::cout << expected_output[idx] << "\t\t" << output[idx] << "\n";
+    std::cout << "Expected:\n";
+    for (int i = 0; i < out_height; i++) {
+        for (int j = 0; j < out_width; j++) {
+            std::cout << expected_output[i * out_width + j] << " ";
         }
+        std::cout << std::endl;
     }
     
     // Cleanup
