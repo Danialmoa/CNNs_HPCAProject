@@ -304,9 +304,13 @@ void ConvBlock::init_weights_and_optimizers() {
     // Initialize optimizers
     std::cout << "Initializing optimizers" << std::endl;
     weights_optimizer = AdamOptimizer(weights_size, learning_rate);
+    std::cout << "Weights optimizer initialized" << std::endl;
     bias_optimizer = AdamOptimizer(bias_size, learning_rate);
+    std::cout << "Bias optimizer initialized" << std::endl;
     gamma_optimizer = AdamOptimizer(out_channels, learning_rate);
+    std::cout << "Gamma optimizer initialized" << std::endl;
     beta_optimizer = AdamOptimizer(out_channels, learning_rate);
+    std::cout << "Beta optimizer initialized" << std::endl;
 
     CHECK_CUDA_ERROR(cudaStreamSynchronize(stream1));
     CHECK_CUDA_ERROR(cudaStreamSynchronize(stream2));
