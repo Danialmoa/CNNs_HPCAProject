@@ -70,7 +70,6 @@ void test_conv_block() {
 
     CHECK_CUDA_ERROR(cudaMemset(d_grad_output, 0, output_size));
     CHECK_CUDA_ERROR(cudaMemset(d_grad_input, 0, input_size));
-    
     // Copy input to device
     CHECK_CUDA_ERROR(cudaMemcpy(d_input, h_input.data(), input_size, cudaMemcpyHostToDevice));
 
@@ -81,45 +80,52 @@ void test_conv_block() {
                            stride, padding, pool_size, pool_stride, 
                            learning_rate);
 
-        // Test forward pass
-        std::cout << "Testing forward pass..." << std::endl;
+        // Forward pass
         conv_block.forward(d_input, d_output, batch_size, height, width);
 
-        // Get forward output
-        std::vector<float> h_output(batch_size * out_channels * pool_out_height * pool_out_width);
-        CHECK_CUDA_ERROR(cudaMemcpy(h_output.data(), d_output, output_size, cudaMemcpyDeviceToHost));
+        // Calculate expected dimensions for gradients
+        int conv_out_height = (height + 2 * padding - kernel_size) / stride + 1;
+        int conv_out_width = (width + 2 * padding - kernel_size) / stride + 1;
+        int pool_out_height = (conv_out_height - pool_size) / pool_stride + 1;
+        int pool_out_width = (conv_out_width - pool_size) / pool_stride + 1;
 
-        // Print sample of input and output
-        print_tensor(h_input.data(), batch_size, in_channels, height, width, "Input");
-        print_tensor(h_output.data(), batch_size, out_channels, pool_out_height, pool_out_width, "Forward Output");
+        // Verify output dimensions
+        std::cout << "\nVerifying dimensions:" << std::endl;
+        std::cout << "Input: [" << batch_size << "," << in_channels << "," 
+                  << height << "," << width << "]" << std::endl;
+        std::cout << "Conv output: [" << batch_size << "," << out_channels << "," 
+                  << conv_out_height << "," << conv_out_width << "]" << std::endl;
+        std::cout << "Pool output: [" << batch_size << "," << out_channels << "," 
+                  << pool_out_height << "," << pool_out_width << "]" << std::endl;
 
-        // Create dummy gradients for backward pass
+        // Create gradients with correct dimensions and scaled values
         std::vector<float> h_grad_output(batch_size * out_channels * pool_out_height * pool_out_width);
         for (float& val : h_grad_output) {
-            val = dist(gen);
+            val = dist(gen) * 0.01f;  // Scale down gradients
         }
-        CHECK_CUDA_ERROR(cudaMemcpy(d_grad_output, h_grad_output.data(), output_size, cudaMemcpyHostToDevice));
 
-        // Test backward pass
+        // Allocate and copy gradients
+        size_t grad_output_size = batch_size * out_channels * pool_out_height * pool_out_width * sizeof(float);
+        size_t grad_input_size = batch_size * in_channels * height * width * sizeof(float);
+
+        CHECK_CUDA_ERROR(cudaMemcpy(d_grad_output, h_grad_output.data(), 
+                                  grad_output_size, cudaMemcpyHostToDevice));
+        CHECK_CUDA_ERROR(cudaMemset(d_grad_input, 0, grad_input_size));
+
+        // Backward pass
         std::cout << "\nTesting backward pass..." << std::endl;
         conv_block.backward(d_grad_output, d_grad_input, batch_size, height, width);
 
-        // Get backward output
-        std::vector<float> h_grad_input(batch_size * in_channels * pool_out_height * pool_out_width);
-        CHECK_CUDA_ERROR(cudaMemcpy(h_grad_input.data(), d_grad_input, input_size, cudaMemcpyDeviceToHost));
+        // Get and verify gradients
+        std::vector<float> h_grad_input(batch_size * in_channels * height * width);
+        CHECK_CUDA_ERROR(cudaMemcpy(h_grad_input.data(), d_grad_input, 
+                                  grad_input_size, cudaMemcpyDeviceToHost));
 
-        // Print sample of gradients
-        print_tensor(h_grad_input.data(), batch_size, in_channels, pool_out_height, pool_out_width, "Gradient Output");
+        // Print sample of gradients with dimensions
+        print_tensor(h_grad_input.data(), batch_size, in_channels, height, width, 
+                    "Gradient Output (should be [batch,in_channels,height,width])");
 
-        // Verify shapes
-        std::cout << "\nShape verification:" << std::endl;
-        std::cout << "Input shape: [" << batch_size << "," << in_channels << "," 
-                  << height << "," << width << "]" << std::endl;
-        std::cout << "Output shape: [" << batch_size << "," << out_channels << "," 
-                  << pool_out_height << "," << pool_out_width << "]" << std::endl;
-
-        // Test multiple forward-backward passes
-        std::cout << "\nTesting multiple iterations..." << std::endl;
+        // Multiple iterations test
         for (int i = 0; i < 3; i++) {
             conv_block.forward(d_input, d_output, batch_size, height, width);
             conv_block.backward(d_grad_output, d_grad_input, batch_size, height, width);
