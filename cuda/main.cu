@@ -61,19 +61,31 @@ float calculate_accuracy(const float* d_predictions, const uint8_t* d_labels, in
     return static_cast<float>(h_correct) / batch_size;
 }
 
-void debug_tensor(const char* name, float* d_tensor, int size) {
-    float* h_debug = new float[size];
-    cudaMemcpy(h_debug, d_tensor, size * sizeof(float), cudaMemcpyDeviceToHost);
+void check_tensor_values(const char* name, float* d_tensor, int size) {
+    float* h_tensor = new float[size];
+    cudaMemcpy(h_tensor, d_tensor, size * sizeof(float), cudaMemcpyDeviceToHost);
     
+    float max_val = -FLT_MAX;
+    float min_val = FLT_MAX;
     float sum = 0.0f;
     bool has_nan = false;
+    bool has_inf = false;
+    
     for (int i = 0; i < size; i++) {
-        sum += std::isnan(h_debug[i]) ? 0 : h_debug[i];
-        if (std::isnan(h_debug[i])) has_nan = true;
+        if (isnan(h_tensor[i])) has_nan = true;
+        if (isinf(h_tensor[i])) has_inf = true;
+        if (!isnan(h_tensor[i]) && !isinf(h_tensor[i])) {
+            max_val = max(max_val, h_tensor[i]);
+            min_val = min(min_val, h_tensor[i]);
+            sum += h_tensor[i];
+        }
     }
     
-    std::cout << name << " - Sum: " << sum << " HasNaN: " << (has_nan ? "Yes" : "No") << std::endl;
-    delete[] h_debug;
+    std::cout << name << " - Min: " << min_val << " Max: " << max_val 
+              << " Sum: " << sum << " HasNaN: " << has_nan 
+              << " HasInf: " << has_inf << std::endl;
+    
+    delete[] h_tensor;
 }
 
 
@@ -111,7 +123,7 @@ int main() {
             ConvBlock conv1(3, 32, 3, 1, 1, 2, 2, learning_rate);  // input: 32x32x3, output: 16x16x32
             ConvBlock conv2(32, 64, 3, 1, 1, 2, 2, learning_rate);  // input: 16x16x32, output: 8x8x64
             ConvBlock conv3(64, 128, 3, 1, 1, 2, 2, learning_rate);  // input: 8x8x64, output: 4x4x128
-            FullyConnectedLayer fc(128 * 4 * 4, 10, learning_rate);  // input: 128x4x4, output: 10
+            FullyConnectedLayer fc(128 * 4 * 4, 10, learning_rate*0.1f);  // input: 128x4x4, output: 10
             std::cout << "Network created" << std::endl;
             // Allocate GPU memory for data and intermediate results
             float *d_batch_images = nullptr;
@@ -166,11 +178,7 @@ int main() {
                     conv3.forward(d_conv_2_output, d_conv_3_output, batch_size, 8, 8);
                     fc.forward(d_conv_3_output, d_fc_output, batch_size);
 
-                    debug_tensor("conv1_output", d_conv_1_output, 10);
-                    debug_tensor("conv2_output", d_conv_2_output, 10);
-                    debug_tensor("conv3_output", d_conv_3_output, 10);
-                    debug_tensor("fc_output", d_fc_output, 10);
-
+                    check_tensor_values("d_fc_output", d_fc_output, 10);
                     // Compute loss and accuracy
                     float batch_loss = fc.compute_loss(d_batch_labels, batch_size);
                     float batch_accuracy = calculate_accuracy(d_fc_output, d_batch_labels, batch_size);
@@ -184,7 +192,7 @@ int main() {
                     conv3.backward(d_grad_fc_output, d_grad_conv_3_output, batch_size, 4, 4);
                     conv2.backward(d_grad_conv_3_output, d_grad_conv_2_output, batch_size, 8, 8);
                     conv1.backward(d_grad_conv_2_output, d_grad_conv_1_output, batch_size, 16, 16);
-
+                    check_tensor_values("d_grad_conv_1_output", d_grad_conv_1_output, conv1_output_size);
                     // Synchronize streams
                     CHECK_CUDA_ERROR(cudaDeviceSynchronize());
 
