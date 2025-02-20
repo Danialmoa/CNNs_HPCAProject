@@ -13,8 +13,8 @@ void test_simple_convolution() {
     const int padding = 1;
     
     // Calculate output dimensions
-    const int out_height = 2;  // Fixed for this test case
-    const int out_width = 2;   // Fixed for this test case
+    const int out_height = 4;  // Fixed for this test case
+    const int out_width = 4;   // Fixed for this test case
     
     std::cout << "Input dimensions: " << height << "x" << width << "\n";
     std::cout << "Output dimensions: " << out_height << "x" << out_width << "\n";
