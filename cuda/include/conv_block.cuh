@@ -23,6 +23,11 @@ private:
     float* d_cache;
     float* d_conv_output_cache;
     int* d_pool_indices;
+    float* d_pool_grad;
+    float* d_relu_grad;
+    float* d_bn_grad;
+    float* d_weight_grad;
+    float* d_bias_grad;
     
     // Batch normalization parameters
     float* d_gamma;
