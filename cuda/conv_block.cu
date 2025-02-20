@@ -42,6 +42,20 @@ ConvBlock::ConvBlock(int in_ch, int out_ch, int k_size,
     init_weights_and_optimizers();
     
 }
+void debug_tensor_sum(const char* name, float* d_tensor, int size) {
+    float* h_debug = new float[size];
+    cudaMemcpy(h_debug, d_tensor, size * sizeof(float), cudaMemcpyDeviceToHost);
+    
+    float sum = 0.0f;
+    bool has_nan = false;
+    for (int i = 0; i < size; i++) {
+        sum += std::isnan(h_debug[i]) ? 0 : h_debug[i];
+        if (std::isnan(h_debug[i])) has_nan = true;
+    }
+    
+    std::cout << name << " - Sum: " << sum << " HasNaN: " << (has_nan ? "Yes" : "No") << std::endl;
+    delete[] h_debug;
+}
 
 void ConvBlock::forward(const float* d_input, float* d_output, 
                        int batch_size, int height, int width) {
@@ -81,7 +95,7 @@ void ConvBlock::forward(const float* d_input, float* d_output,
         batch_size, in_channels, out_channels, height, width,
         kernel_size, stride, padding, conv_output_height, conv_output_width
     );
-    debug_tensor("conv_output_cache", d_conv_output_cache, 10);
+    debug_tensor_sum("conv_output_cache", d_conv_output_cache, 10);
     // 2. Batch Normalization
     const int threads_per_block = 256;
     size_t bn_shared_mem_size = 2 * threads_per_block * sizeof(float);
@@ -94,7 +108,8 @@ void ConvBlock::forward(const float* d_input, float* d_output,
         conv_output_height, conv_output_width,
         bn_epsilon, bn_momentum, is_training
     );
-    debug_tensor("conv_output_cache", d_conv_output_cache, 10);
+    debug_tensor_sum("batch_mean", d_batch_mean, 10);
+    debug_tensor_sum("batch_var", d_batch_var, 10);
     // 3. ReLU
     const int total_elements = batch_size * out_channels * conv_output_height * conv_output_width;
     const int block_size = 256;
@@ -118,7 +133,7 @@ void ConvBlock::forward(const float* d_input, float* d_output,
         pool_size, pool_stride,
         pool_output_height, pool_output_width
     );
-    debug_tensor("output", d_output, 10);
+    debug_tensor_sum("output", d_output, 10);
     // Synchronize all streams
     cudaStreamSynchronize(stream1);
     cudaStreamSynchronize(stream2);
