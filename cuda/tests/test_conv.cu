@@ -105,9 +105,12 @@ void test_simple_convolution() {
     }
     
     std::cout << "\nKernel Matrix:\n";
+    float h_kernel[9];
+    cudaMemcpy(h_kernel, d_kernel, kernel_size_bytes, cudaMemcpyDeviceToHost);
+  
     for (int h = 0; h < kernel_size; h++) {
         for (int w = 0; w < kernel_size; w++) {
-            std::cout << kernel[h * kernel_size + w] << " ";
+            std::cout << h_kernel[h * kernel_size + w] << " ";
         }
         std::cout << "\n";
     }
