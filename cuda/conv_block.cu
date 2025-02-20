@@ -128,6 +128,19 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input,
                         int batch_size, int height, int width) {
 
     const float grad_scale = 1.0f / (batch_size * out_channels);
+    float* d_pool_grad = nullptr;
+    float* d_relu_grad = nullptr;
+    float* d_bn_grad = nullptr;
+    float* d_weight_grad = nullptr;
+    float* d_bias_grad = nullptr;
+    
+    cudaMalloc(&d_pool_grad, batch_size * out_channels * conv_output_height * 
+               conv_output_width * sizeof(float));
+    cudaMalloc(&d_relu_grad, batch_size * out_channels * conv_output_height * 
+               conv_output_width * sizeof(float));
+    cudaMalloc(&d_bn_grad, batch_size * out_channels * conv_output_height * 
+               conv_output_width * sizeof(float));
+    
     // 1. Max Pooling Backward
     dim3 pool_block(16, 16);
     dim3 pool_grid(batch_size, out_channels, 
@@ -143,7 +156,7 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input,
 
     max_pool_backward_kernel<<<pool_grid, pool_block, 0, stream1>>>(
         d_grad_output,
-        d_conv_output_cache,  // Gradients for conv output
+        d_pool_grad,  // Gradients for conv output
         d_pool_indices,
         batch_size,
         out_channels,
@@ -154,35 +167,20 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input,
         pool_output_height,
         pool_output_width
     );
+    cudaStreamSynchronize(stream1);
 
     // 2. ReLU Backward
     const int total_elements = batch_size * out_channels * conv_output_height * conv_output_width;
     const int block_size = 256;
     const int num_blocks = (total_elements + block_size - 1) / block_size;
 
-    float* d_relu_grad = nullptr;
-    float* d_gamma_grad = nullptr;
-    float* d_beta_grad = nullptr;
-    float* d_weight_grad = nullptr;
-    float* d_bias_grad = nullptr;
-
-    // Allocate if not already allocated
-    if (!d_relu_grad) {
-        CHECK_CUDA_ERROR(cudaMalloc(&d_relu_grad, total_elements * sizeof(float)));
-        CHECK_CUDA_ERROR(cudaMalloc(&d_gamma_grad, out_channels * sizeof(float)));
-        CHECK_CUDA_ERROR(cudaMalloc(&d_beta_grad, out_channels * sizeof(float)));
-        CHECK_CUDA_ERROR(cudaMalloc(&d_weight_grad, 
-            out_channels * in_channels * kernel_size * kernel_size * sizeof(float)));
-        CHECK_CUDA_ERROR(cudaMalloc(&d_bias_grad, out_channels * sizeof(float)));
-    }
-    
-
     relu_backward_kernel<<<num_blocks, block_size, 0, stream2>>>(
-        d_conv_output_cache,  // Grad from pooling
+        d_pool_grad,  // Grad from pooling
         d_conv_output_cache,  // Forward output (cached)
         d_relu_grad,
         total_elements
     );
+    cudaStreamSynchronize(stream2);
 
     // 3. Batch Normalization Backward
     const int threads_per_block = 256;
@@ -192,7 +190,7 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input,
         d_gamma,
         d_batch_mean,
         d_batch_var,
-        d_conv_output_cache,  // Reuse buffer for BN gradients
+        d_bn_grad,
         d_gamma_grad,
         d_beta_grad,
         batch_size,
@@ -201,7 +199,7 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input,
         conv_output_width,
         bn_epsilon
     );
-
+    cudaStreamSynchronize(stream2);
     // 4. Convolution Backward
     dim3 conv_block(16, 16);
     dim3 conv_grid(
@@ -211,7 +209,7 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input,
     );
 
     conv_backward_kernel<<<conv_grid, conv_block, 0, stream3>>>(
-        d_conv_output_cache,  // Grad from BN
+        d_bn_grad,  // Grad from BN
         d_cache,             // Cached input
         d_weights,
         d_grad_input,
@@ -239,6 +237,7 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input,
         total_params,
         out_channels
     );
+    cudaStreamSynchronize(stream3);
 
     // Update parameters using Adam optimizer
     weights_optimizer.update(d_weights, d_weight_grad);
@@ -250,6 +249,9 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input,
     cudaStreamSynchronize(stream1);
     cudaStreamSynchronize(stream2);
     cudaStreamSynchronize(stream3);
+    cudaFree(d_pool_grad);
+    cudaFree(d_relu_grad);
+    cudaFree(d_bn_grad);
 }
 
 void ConvBlock::init_weights_and_optimizers() {

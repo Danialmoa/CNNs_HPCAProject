@@ -113,7 +113,6 @@ __global__ void batch_norm_backward_kernel(
     const float std = sqrtf(batch_var[c] + epsilon);
     
     float sum_grad = 0.0f;
-    float sum_grad_h = 0.0f;
     float sum_grad_h_x = 0.0f;
 
     // First pass: compute sums for gradient calculations
