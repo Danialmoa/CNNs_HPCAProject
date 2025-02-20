@@ -65,4 +65,5 @@ void AdamOptimizer::update(float* params, const float* gradients) {
         learning_rate, beta1, beta2, epsilon,
         beta1_t, beta2_t, size
     );
+    CHECK_CUDA_ERROR(cudaDeviceSynchronize());
 }

@@ -148,11 +148,11 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input,
 
     // Initialize gradients to zero
     size_t conv_output_size = batch_size * out_channels * conv_output_height * conv_output_width;
-    CHECK_CUDA_ERROR(cudaMemset(d_pool_grad, 0, conv_output_size * sizeof(float)));
-    CHECK_CUDA_ERROR(cudaMemset(d_relu_grad, 0, conv_output_size * sizeof(float)));
-    CHECK_CUDA_ERROR(cudaMemset(d_bn_grad, 0, conv_output_size * sizeof(float)));
-    CHECK_CUDA_ERROR(cudaMemset(d_grad_input, 0, 
-        batch_size * in_channels * height * width * sizeof(float)));
+    CHECK_CUDA_ERROR(cudaMemsetAsync(d_pool_grad, 0, conv_output_size * sizeof(float), stream1));
+    CHECK_CUDA_ERROR(cudaMemsetAsync(d_relu_grad, 0, conv_output_size * sizeof(float), stream2));
+    CHECK_CUDA_ERROR(cudaMemsetAsync(d_bn_grad, 0, conv_output_size * sizeof(float), stream2));
+    CHECK_CUDA_ERROR(cudaMemsetAsync(d_grad_input, 0, 
+        batch_size * in_channels * height * width * sizeof(float), stream3));
 
     const float grad_scale = 1.0f / (batch_size * out_channels);
     
@@ -254,9 +254,10 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input,
     std::cout << "Parameters updated" << std::endl;
     // Synchronize all streams
     std::cout << "Synchronizing streams" << std::endl;
-    cudaStreamSynchronize(stream1);
-    cudaStreamSynchronize(stream2);
-    cudaStreamSynchronize(stream3);
+    CHECK_CUDA_ERROR(cudaStreamSynchronize(stream1));
+    CHECK_CUDA_ERROR(cudaStreamSynchronize(stream2));
+    CHECK_CUDA_ERROR(cudaStreamSynchronize(stream3));
+    CHECK_CUDA_ERROR(cudaDeviceSynchronize());
 }
 
 void ConvBlock::init_weights_and_optimizers() {
