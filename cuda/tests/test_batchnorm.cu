@@ -119,11 +119,146 @@ void test_simple_batchnorm() {
     cudaFree(d_running_var);
     cudaFree(d_batch_mean);
     cudaFree(d_batch_var);
-} 
+}
+
+void test_simple_batchnorm_backward() {
+    std::cout << "\n=== Testing BatchNorm Backward ===\n";
+    
+    // Test input: 2 channels, 2x2 feature maps, 2 batches
+    float input[16] = {
+        // Channel 1
+        1.0f, 2.0f, 3.0f, 4.0f,    // First batch
+        5.0f, 6.0f, 7.0f, 8.0f,    // Second batch
+        // Channel 2
+        1.0f, 2.0f, 3.0f, 4.0f,    // First batch
+        5.0f, 6.0f, 7.0f, 8.0f     // Second batch
+    };
+    
+    // Parameters
+    float gamma[2] = {1.0f, 1.0f};
+    float beta[2] = {0.0f, 0.0f};
+    float batch_mean[2] = {4.5f, 4.5f};  // Pre-computed means
+    float batch_var[2] = {6.25f, 6.25f}; // Pre-computed variances
+    
+    // Gradient from upstream layer (all ones for simplicity)
+    float grad_output[16];
+    for (int i = 0; i < 16; i++) {
+        grad_output[i] = 1.0f;
+    }
+    
+    // Allocate device memory
+    float *d_input, *d_grad_output, *d_gamma;
+    float *d_batch_mean, *d_batch_var;
+    float *d_grad_input, *d_grad_gamma, *d_grad_beta;
+    
+    cudaMalloc(&d_input, 16 * sizeof(float));
+    cudaMalloc(&d_grad_output, 16 * sizeof(float));
+    cudaMalloc(&d_gamma, 2 * sizeof(float));
+    cudaMalloc(&d_batch_mean, 2 * sizeof(float));
+    cudaMalloc(&d_batch_var, 2 * sizeof(float));
+    cudaMalloc(&d_grad_input, 16 * sizeof(float));
+    cudaMalloc(&d_grad_gamma, 2 * sizeof(float));
+    cudaMalloc(&d_grad_beta, 2 * sizeof(float));
+    
+    // Initialize gradients to zero
+    cudaMemset(d_grad_input, 0, 16 * sizeof(float));
+    cudaMemset(d_grad_gamma, 0, 2 * sizeof(float));
+    cudaMemset(d_grad_beta, 0, 2 * sizeof(float));
+    
+    // Copy data to device
+    cudaMemcpy(d_input, input, 16 * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_grad_output, grad_output, 16 * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_gamma, gamma, 2 * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_batch_mean, batch_mean, 2 * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_batch_var, batch_var, 2 * sizeof(float), cudaMemcpyHostToDevice);
+    
+    // Launch backward kernel
+    batch_norm_backward_kernel<<<2, 256>>>(
+        d_grad_output,
+        d_input,
+        d_gamma,
+        d_batch_mean,
+        d_batch_var,
+        d_grad_input,
+        d_grad_gamma,
+        d_grad_beta,
+        2,  // batch_size
+        2,  // channels
+        2,  // height
+        2,  // width
+        1e-5f  // epsilon
+    );
+    
+    // Check for kernel errors
+    cudaError_t err = cudaGetLastError();
+    if (err != cudaSuccess) {
+        throw std::runtime_error(cudaGetErrorString(err));
+    }
+    
+    // Synchronize device
+    cudaDeviceSynchronize();
+    
+    // Get results
+    float grad_input[16];
+    float grad_gamma[2];
+    float grad_beta[2];
+    
+    cudaMemcpy(grad_input, d_grad_input, 16 * sizeof(float), cudaMemcpyDeviceToHost);
+    cudaMemcpy(grad_gamma, d_grad_gamma, 2 * sizeof(float), cudaMemcpyDeviceToHost);
+    cudaMemcpy(grad_beta, d_grad_beta, 2 * sizeof(float), cudaMemcpyDeviceToHost);
+    
+    // Print results
+    std::cout << "Input Data:\n";
+    for (int b = 0; b < 2; b++) {
+        std::cout << "Batch " << b + 1 << ":\n";
+        for (int c = 0; c < 2; c++) {
+            std::cout << "Channel " << c + 1 << ": ";
+            for (int i = 0; i < 4; i++) {
+                int idx = (b * 2 + c) * 4 + i;
+                std::cout << input[idx] << " ";
+            }
+            std::cout << "\n";
+        }
+    }
+    
+    std::cout << "\nGradient w.r.t Input:\n";
+    for (int b = 0; b < 2; b++) {
+        std::cout << "Batch " << b + 1 << ":\n";
+        for (int c = 0; c < 2; c++) {
+            std::cout << "Channel " << c + 1 << ": ";
+            for (int i = 0; i < 4; i++) {
+                int idx = (b * 2 + c) * 4 + i;
+                std::cout << grad_input[idx] << " ";
+            }
+            std::cout << "\n";
+        }
+    }
+    
+    std::cout << "\nGradient w.r.t Gamma:\n";
+    for (int c = 0; c < 2; c++) {
+        std::cout << "Channel " << c + 1 << ": " << grad_gamma[c] << "\n";
+    }
+    
+    std::cout << "\nGradient w.r.t Beta:\n";
+    for (int c = 0; c < 2; c++) {
+        std::cout << "Channel " << c + 1 << ": " << grad_beta[c] << "\n";
+    }
+    
+    // Cleanup
+    cudaFree(d_input);
+    cudaFree(d_grad_output);
+    cudaFree(d_gamma);
+    cudaFree(d_batch_mean);
+    cudaFree(d_batch_var);
+    cudaFree(d_grad_input);
+    cudaFree(d_grad_gamma);
+    cudaFree(d_grad_beta);
+}
 
 int main() {
     try {
         test_simple_batchnorm();
+        test_simple_batchnorm_backward();
     } catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << std::endl;
         return 1;
