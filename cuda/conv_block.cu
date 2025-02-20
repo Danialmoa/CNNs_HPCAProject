@@ -42,20 +42,6 @@ ConvBlock::ConvBlock(int in_ch, int out_ch, int k_size,
     init_weights_and_optimizers();
     
 }
-void debug_tensor(const char* name, float* d_tensor, int size) {
-    float* h_debug = new float[size];
-    cudaMemcpy(h_debug, d_tensor, size * sizeof(float), cudaMemcpyDeviceToHost);
-    
-    float sum = 0.0f;
-    bool has_nan = false;
-    for (int i = 0; i < size; i++) {
-        sum += std::isnan(h_debug[i]) ? 0 : h_debug[i];
-        if (std::isnan(h_debug[i])) has_nan = true;
-    }
-    
-    std::cout << name << " - Sum: " << sum << " HasNaN: " << (has_nan ? "Yes" : "No") << std::endl;
-    delete[] h_debug;
-}
 
 void ConvBlock::forward(const float* d_input, float* d_output, 
                        int batch_size, int height, int width) {
