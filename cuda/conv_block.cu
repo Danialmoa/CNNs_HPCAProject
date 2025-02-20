@@ -321,9 +321,9 @@ void ConvBlock::init_weights_and_optimizers() {
 
 void ConvBlock::init_streams() {
     if (!streams_initialized) {
-        cudaStreamCreate(&stream1);
-        cudaStreamCreate(&stream2);
-        cudaStreamCreate(&stream3);
+        CHECK_CUDA_ERROR(cudaStreamCreate(&stream1));
+        CHECK_CUDA_ERROR(cudaStreamCreate(&stream2));
+        CHECK_CUDA_ERROR(cudaStreamCreate(&stream3));
         streams_initialized = true;
     }
 }
