@@ -96,7 +96,7 @@ int main() {
             ConvBlock conv2(32, 64, 3, 1, 1, 2, 2, learning_rate);  // input: 16x16x32, output: 8x8x64
             ConvBlock conv3(64, 128, 3, 1, 1, 2, 2, learning_rate);  // input: 8x8x64, output: 4x4x128
             FullyConnectedLayer fc(128 * 4 * 4, 10, learning_rate);  // input: 128x4x4, output: 10
-
+            std::cout << "Network created" << std::endl;
             // Allocate GPU memory for data and intermediate results
             float *d_batch_images = nullptr;
             uint8_t *d_batch_labels = nullptr;
