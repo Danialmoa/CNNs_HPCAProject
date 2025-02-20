@@ -313,6 +313,12 @@ void ConvBlock::allocate_memory(int batch_size) {
     size_t conv_output_size = batch_size * out_channels * conv_output_height * conv_output_width;
     size_t pool_indices_size = batch_size * out_channels * pool_output_height * pool_output_width;
 
+
+    std::cout << "Allocating memory for batch size: " << batch_size << " in_channels: " << in_channels << " input_height: " << input_height << " input_width: " << input_width << std::endl;
+    std::cout << "conv_output_height: " << conv_output_height << " conv_output_width: " << conv_output_width << std::endl;
+    std::cout << "pool_output_height: " << pool_output_height << " pool_output_width: " << pool_output_width << std::endl;
+    std::cout << "Out channels: " << out_channels << std::endl;
+    
     // Allocate forward pass memory
     CHECK_CUDA_ERROR(cudaMalloc(&d_cache, input_size * sizeof(float)));
     CHECK_CUDA_ERROR(cudaMalloc(&d_conv_output_cache, conv_output_size * sizeof(float)));
