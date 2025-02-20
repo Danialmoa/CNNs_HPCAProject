@@ -118,7 +118,7 @@ void ConvBlock::forward(const float* d_input, float* d_output,
     relu_kernel<<<num_blocks, block_size, 0, stream2>>>(
         d_conv_output_cache, total_elements
     );
-    debug_tensor("conv_output_cache", d_conv_output_cache, 10);
+    debug_tensor_sum("conv_output_cache", d_conv_output_cache, 10);
     // 4. Max Pooling
     dim3 pool_block(16, 16);
     dim3 pool_grid(
