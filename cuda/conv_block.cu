@@ -312,6 +312,7 @@ void ConvBlock::init_weights_and_optimizers() {
     CHECK_CUDA_ERROR(cudaStreamSynchronize(stream2));
     CHECK_CUDA_ERROR(cudaStreamSynchronize(stream3));
     CHECK_CUDA_ERROR(cudaDeviceSynchronize());
+    std::cout << "Initialization done" << std::endl;
 }
 
 void ConvBlock::init_streams() {
