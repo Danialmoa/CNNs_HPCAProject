@@ -117,6 +117,8 @@ void test_simple_convolution() {
     
     std::cout << "\nConvolution Results:\n";
     std::cout << "Expected:\n";
+    float out_put_h[16];
+    cudaMemcpy(out_put_h, d_output, output_size, cudaMemcpyDeviceToHost);
     for (int i = 0; i < out_height; i++) {
         for (int j = 0; j < out_width; j++) {
             std::cout << expected_output[i * out_width + j] << " ";
