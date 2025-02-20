@@ -130,9 +130,10 @@ void ConvBlock::forward(const float* d_input, float* d_output,
 void ConvBlock::backward(const float* d_grad_output, float* d_grad_input,
                         int batch_size, int height, int width) {
 
-    if (batch_size != current_batch_size || height != input_height || width != input_width) {
-        std::cerr << "Error: Dimensions mismatch in backward pass" << std::endl;
-        return;
+    if (batch_size != current_batch_size) {
+        std::cerr << "Batch size mismatch in backward pass of ConvBlock" << std::endl;
+        std::cerr << "Expected: " << current_batch_size << ", Got: " << batch_size << std::endl;
+        throw std::runtime_error("Batch size mismatch in backward pass");
     }
     //Debug
     std::cout << "Backward pass" << std::endl;
