@@ -183,61 +183,45 @@ void test_simple_convolution_backward() {
     };
     
     // Allocate device memory
-    float *d_input, *d_kernel, *d_grad_output, *d_grad_input, *d_grad_kernel;
+    float *d_input, *d_kernel, *d_grad_output, *d_grad_input, *d_grad_weights, *d_grad_biases;
     const size_t input_size = batch_size * in_channels * height * width * sizeof(float);
     const size_t kernel_size_bytes = out_channels * in_channels * kernel_size * kernel_size * sizeof(float);
     const size_t output_size = batch_size * out_channels * out_height * out_width * sizeof(float);
+    const size_t bias_size = out_channels * sizeof(float);
     
     cudaMalloc(&d_input, input_size);
     cudaMalloc(&d_kernel, kernel_size_bytes);
     cudaMalloc(&d_grad_output, output_size);
     cudaMalloc(&d_grad_input, input_size);
-    cudaMalloc(&d_grad_kernel, kernel_size_bytes);
+    cudaMalloc(&d_grad_weights, kernel_size_bytes);
+    cudaMalloc(&d_grad_biases, bias_size);
     
     // Initialize gradients to zero
     cudaMemset(d_grad_input, 0, input_size);
-    cudaMemset(d_grad_kernel, 0, kernel_size_bytes);
+    cudaMemset(d_grad_weights, 0, kernel_size_bytes);
+    cudaMemset(d_grad_biases, 0, bias_size);
     
     // Copy data to device
     cudaMemcpy(d_input, input, input_size, cudaMemcpyHostToDevice);
     cudaMemcpy(d_kernel, kernel, kernel_size_bytes, cudaMemcpyHostToDevice);
     cudaMemcpy(d_grad_output, grad_output, output_size, cudaMemcpyHostToDevice);
     
-    // Launch backward kernels
+    // Launch backward kernel
     dim3 block(8, 8);
-    dim3 grid_input(
-        (width + block.x - 1) / block.x,
-        (height + block.y - 1) / block.y,
-        batch_size * in_channels
+    dim3 grid(
+        (out_width + block.x - 1) / block.x,
+        (out_height + block.y - 1) / block.y,
+        batch_size * out_channels
     );
     
-    dim3 grid_kernel(
-        (kernel_size + block.x - 1) / block.x,
-        (kernel_size + block.y - 1) / block.y,
-        out_channels * in_channels
-    );
-    
-    // Compute gradients
-    conv_backward_kernel<<<grid_input, block>>>(
-        d_grad_output,
-        d_kernel,
-        d_grad_input,
-        batch_size,
-        in_channels,
-        out_channels,
-        height,
-        width,
-        kernel_size,
-        stride,
-        padding,
-        out_height,
-        out_width
-    );
-    
-    conv_backward_kernel<<<grid_kernel, block>>>(
+    // Single backward pass to compute all gradients
+    conv_backward_kernel<<<grid, block>>>(
         d_grad_output,
         d_input,
-        d_grad_kernel,
+        d_kernel,
+        d_grad_input,
+        d_grad_weights,
+        d_grad_biases,
         batch_size,
         in_channels,
         out_channels,
@@ -260,9 +244,11 @@ void test_simple_convolution_backward() {
     
     // Get results
     float grad_input[16];
-    float grad_kernel[9];
+    float grad_weights[9];
+    float grad_biases[1];
     cudaMemcpy(grad_input, d_grad_input, input_size, cudaMemcpyDeviceToHost);
-    cudaMemcpy(grad_kernel, d_grad_kernel, kernel_size_bytes, cudaMemcpyDeviceToHost);
+    cudaMemcpy(grad_weights, d_grad_weights, kernel_size_bytes, cudaMemcpyDeviceToHost);
+    cudaMemcpy(grad_biases, d_grad_biases, bias_size, cudaMemcpyDeviceToHost);
     
     // Print results
     std::cout << "\nGradient w.r.t Input:\n";
@@ -273,20 +259,24 @@ void test_simple_convolution_backward() {
         std::cout << "\n";
     }
     
-    std::cout << "\nGradient w.r.t Kernel:\n";
+    std::cout << "\nGradient w.r.t Weights:\n";
     for (int h = 0; h < kernel_size; h++) {
         for (int w = 0; w < kernel_size; w++) {
-            std::cout << grad_kernel[h * kernel_size + w] << " ";
+            std::cout << grad_weights[h * kernel_size + w] << " ";
         }
         std::cout << "\n";
     }
+    
+    std::cout << "\nGradient w.r.t Biases:\n";
+    std::cout << grad_biases[0] << std::endl;
     
     // Cleanup
     cudaFree(d_input);
     cudaFree(d_kernel);
     cudaFree(d_grad_output);
     cudaFree(d_grad_input);
-    cudaFree(d_grad_kernel);
+    cudaFree(d_grad_weights);
+    cudaFree(d_grad_biases);
 }
 
 int main() {
