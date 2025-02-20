@@ -44,6 +44,11 @@ void test_conv_block() {
     const int pool_out_height = (conv_out_height - pool_size) / pool_stride + 1;
     const int pool_out_width = (conv_out_width - pool_size) / pool_stride + 1;
 
+    std::cout << "Input dimensions: " << height << "x" << width << "\n";
+    std::cout << "Output dimensions: " << conv_out_height << "x" << conv_out_width << "\n";
+    std::cout << "Pooling dimensions: " << pool_out_height << "x" << pool_out_width << "\n";
+    
+
     // Create input data
     std::vector<float> h_input(batch_size * in_channels * height * width);
     std::normal_distribution<float> dist(0.0f, 1.0f);
