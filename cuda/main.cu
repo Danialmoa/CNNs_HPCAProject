@@ -61,6 +61,22 @@ float calculate_accuracy(const float* d_predictions, const uint8_t* d_labels, in
     return static_cast<float>(h_correct) / batch_size;
 }
 
+void debug_tensor(const char* name, float* d_tensor, int size) {
+    float* h_debug = new float[size];
+    cudaMemcpy(h_debug, d_tensor, size * sizeof(float), cudaMemcpyDeviceToHost);
+    
+    float sum = 0.0f;
+    bool has_nan = false;
+    for (int i = 0; i < size; i++) {
+        sum += std::isnan(h_debug[i]) ? 0 : h_debug[i];
+        if (std::isnan(h_debug[i])) has_nan = true;
+    }
+    
+    std::cout << name << " - Sum: " << sum << " HasNaN: " << (has_nan ? "Yes" : "No") << std::endl;
+    delete[] h_debug;
+}
+
+
 int main() {
     try {
         // Set device to use
@@ -149,6 +165,11 @@ int main() {
                     conv2.forward(d_conv_1_output, d_conv_2_output, batch_size, 16, 16);
                     conv3.forward(d_conv_2_output, d_conv_3_output, batch_size, 8, 8);
                     fc.forward(d_conv_3_output, d_fc_output, batch_size);
+
+                    debug_tensor("conv1_output", d_conv_1_output, 10);
+                    debug_tensor("conv2_output", d_conv_2_output, 10);
+                    debug_tensor("conv3_output", d_conv_3_output, 10);
+                    debug_tensor("fc_output", d_fc_output, 10);
 
                     // Compute loss and accuracy
                     float batch_loss = fc.compute_loss(d_batch_labels, batch_size);
