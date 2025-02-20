@@ -28,6 +28,8 @@ private:
     float* d_bn_grad;
     float* d_weight_grad;
     float* d_bias_grad;
+    float* d_gamma_grad;
+    float* d_beta_grad;
     
     // Batch normalization parameters
     float* d_gamma;
