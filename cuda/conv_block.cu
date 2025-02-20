@@ -142,6 +142,10 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input,
     std::cout << "in_channels: " << in_channels << " kernel_size: " << kernel_size << " stride: " << stride << " padding: " << padding << std::endl;
     std::cout << "pool_size: " << pool_size << " pool_stride: " << pool_stride << std::endl;
 
+    if (d_pool_grad == nullptr || d_relu_grad == nullptr || d_bn_grad == nullptr) {
+        allocate_memory(batch_size);
+    }
+
     // Initialize gradients to zero
     size_t conv_output_size = batch_size * out_channels * conv_output_height * conv_output_width;
     CHECK_CUDA_ERROR(cudaMemset(d_pool_grad, 0, conv_output_size * sizeof(float)));
