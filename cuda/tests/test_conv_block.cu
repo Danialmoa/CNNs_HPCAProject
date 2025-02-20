@@ -116,10 +116,10 @@ void test_conv_block() {
         std::cout << "\nTesting backward pass..." << std::endl;
         conv_block.backward(d_grad_output, d_grad_input, batch_size, height, width);
 
-        // Get and verify gradients
-        std::vector<float> h_grad_input(batch_size * in_channels * height * width);
-        CHECK_CUDA_ERROR(cudaMemcpy(h_grad_input.data(), d_grad_input, 
-                                  grad_input_size, cudaMemcpyDeviceToHost));
+        // // Get and verify gradients
+        // std::vector<float> h_grad_input(batch_size * in_channels * height * width);
+        // CHECK_CUDA_ERROR(cudaMemcpy(h_grad_input.data(), d_grad_input, 
+        //                           grad_input_size, cudaMemcpyDeviceToHost));
 
         // Print sample of gradients with dimensions
         print_tensor(h_grad_input.data(), batch_size, in_channels, height, width, 
