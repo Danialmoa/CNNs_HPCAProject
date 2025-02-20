@@ -38,8 +38,9 @@ ConvBlock::ConvBlock(int in_ch, int out_ch, int k_size,
       d_pool_grad(nullptr), d_relu_grad(nullptr), d_bn_grad(nullptr),
       d_weight_grad(nullptr), d_bias_grad(nullptr) {
     
-    init_weights_and_optimizers();
     init_streams();
+    init_weights_and_optimizers();
+    
 }
 
 void ConvBlock::forward(const float* d_input, float* d_output, 
