@@ -289,6 +289,11 @@ void ConvBlock::init_weights_and_optimizers() {
     bias_optimizer = AdamOptimizer(bias_size, learning_rate);
     gamma_optimizer = AdamOptimizer(out_channels, learning_rate);
     beta_optimizer = AdamOptimizer(out_channels, learning_rate);
+
+    CHECK_CUDA_ERROR(cudaStreamSynchronize(stream1));
+    CHECK_CUDA_ERROR(cudaStreamSynchronize(stream2));
+    CHECK_CUDA_ERROR(cudaStreamSynchronize(stream3));
+    CHECK_CUDA_ERROR(cudaDeviceSynchronize());
 }
 
 void ConvBlock::init_streams() {
@@ -318,7 +323,7 @@ void ConvBlock::allocate_memory(int batch_size) {
     std::cout << "conv_output_height: " << conv_output_height << " conv_output_width: " << conv_output_width << std::endl;
     std::cout << "pool_output_height: " << pool_output_height << " pool_output_width: " << pool_output_width << std::endl;
     std::cout << "Out channels: " << out_channels << std::endl;
-    
+
     // Allocate forward pass memory
     CHECK_CUDA_ERROR(cudaMalloc(&d_cache, input_size * sizeof(float)));
     CHECK_CUDA_ERROR(cudaMalloc(&d_conv_output_cache, conv_output_size * sizeof(float)));
