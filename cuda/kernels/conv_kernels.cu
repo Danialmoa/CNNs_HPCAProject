@@ -39,7 +39,7 @@ __global__ void conv_forward_kernel(
                 
                 if (in_h >= 0 && in_h < height && in_w >= 0 && in_w < width) {
                     const int in_idx = ((n * in_channels + c_in) * height + in_h) * width + in_w;
-                    const int w_idx = ((c_out * in_channels + c_in) * kernel_size + (kernel_size-1-kh)) * kernel_size + (kernel_size-1-kw);
+                    const int w_idx = ((c_out * in_channels + c_in) * kernel_size + kh) * kernel_size + kw;
                     sum += input[in_idx] * weights[w_idx];
                 }
             }
@@ -68,40 +68,39 @@ __global__ void conv_backward_kernel(
     int out_height,
     int out_width
 ) {
-    int batch = blockIdx.x;
-    int out_ch = blockIdx.y;
-    int h = blockIdx.z / out_width;
-    int w = blockIdx.z % out_width;
+    const int x = blockIdx.x * blockDim.x + threadIdx.x;
+    const int y = blockIdx.y * blockDim.y + threadIdx.y;
+    const int n = blockIdx.z / out_channels;
+    const int c_out = blockIdx.z % out_channels;
     
-    if (batch >= batch_size || out_ch >= out_channels || 
-        h >= out_height || w >= out_width) return;
+    if (x >= out_width || y >= out_height || n >= batch_size) return;
     
-    int out_idx = ((batch * out_channels + out_ch) * out_height + h) * out_width + w;
-    float grad = grad_output[out_idx] / batch_size;
-    
-    // Clip gradients 
-    const float CLIP_VALUE = 5.0f;
-    grad = fmaxf(fminf(grad, CLIP_VALUE), -CLIP_VALUE);
-
-    // Accumulate bias gradients
-    atomicAdd(&grad_biases[out_ch], grad);
+    // Get gradient from output
+    const int out_idx = ((n * out_channels + c_out) * out_height + y) * out_width + x;
+    const float grad = grad_output[out_idx];
+    atomicAdd(&grad_biases[c_out], grad);
 
     // L2 regularization coefficient
     const float l2_reg = 0.0001f;
     
+    // Compute the input window position
+    const int start_h = y * stride - padding;
+    const int start_w = x * stride - padding;
+    
     // Compute gradients for weights and input
-    for (int in_ch = 0; in_ch < in_channels; in_ch++) {
+    for (int c_in = 0; c_in < in_channels; c_in++) {
         for (int kh = 0; kh < kernel_size; kh++) {
+            const int in_h = start_h + kh;
+            
             for (int kw = 0; kw < kernel_size; kw++) {
-                int h_in = h * stride - padding + kh;
-                int w_in = w * stride - padding + kw;
+                const int in_w = start_w + kw;
                 
-                if (h_in >= 0 && h_in < height && w_in >= 0 && w_in < width) {
-                    int in_idx = ((batch * in_channels + in_ch) * height + h_in) * width + w_in;
-                    int weight_idx = ((out_ch * in_channels + in_ch) * kernel_size + kh) * kernel_size + kw;
-                    float weight_grad = input[in_idx] * grad + l2_reg * weights[weight_idx];
+                if (in_h >= 0 && in_h < height && in_w >= 0 && in_w < width) {
+                    const int in_idx = ((n * in_channels + c_in) * height + in_h) * width + in_w;
+                    const int weight_idx = ((c_out * in_channels + c_in) * kernel_size + kh) * kernel_size + kw;
                     
                     // Gradient w.r.t. weights
+                    float weight_grad = input[in_idx] * grad + l2_reg * weights[weight_idx];
                     atomicAdd(&grad_weights[weight_idx], weight_grad);
                     
                     // Gradient w.r.t. input
