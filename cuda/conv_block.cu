@@ -133,6 +133,15 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input,
         std::cerr << "Error: Dimensions mismatch in backward pass" << std::endl;
         return;
     }
+    //Debug
+    std::cout << "Backward pass" << std::endl;
+    std::cout << "batch_size: " << batch_size << " height: " << height << " width: " << width << std::endl;
+    std::cout << "current_batch_size: " << current_batch_size << " input_height: " << input_height << " input_width: " << input_width << std::endl;
+    std::cout << "out_channels: " << out_channels << " conv_output_height: " << conv_output_height << " conv_output_width: " << conv_output_width << std::endl;
+    std::cout << "pool_output_height: " << pool_output_height << " pool_output_width: " << pool_output_width << std::endl;
+    std::cout << "in_channels: " << in_channels << " kernel_size: " << kernel_size << " stride: " << stride << " padding: " << padding << std::endl;
+    std::cout << "pool_size: " << pool_size << " pool_stride: " << pool_stride << std::endl;
+
     // Initialize gradients to zero
     size_t conv_output_size = batch_size * out_channels * conv_output_height * conv_output_width;
     CHECK_CUDA_ERROR(cudaMemset(d_pool_grad, 0, conv_output_size * sizeof(float)));
@@ -163,6 +172,8 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input,
     );
     cudaStreamSynchronize(stream1);
 
+    std::cout << "Pooling backward done" << std::endl;
+
     // 2. ReLU Backward
     relu_backward_kernel<<<conv_output_size, 256, 0, stream2>>>(
         d_pool_grad,  // Grad from pooling
@@ -171,7 +182,7 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input,
         conv_output_size
     );
     cudaStreamSynchronize(stream2);
-
+    std::cout << "ReLU backward done" << std::endl;
     // 3. Batch Normalization Backward
     const int threads_per_block = 256;
     batch_norm_backward_kernel<<<out_channels, threads_per_block, 0, stream2>>>(
@@ -190,6 +201,7 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input,
         bn_epsilon
     );
     cudaStreamSynchronize(stream2);
+    std::cout << "Batch normalization backward done" << std::endl;
     // 4. Convolution Backward
     dim3 conv_block(16, 16);
     dim3 conv_grid(
@@ -197,7 +209,6 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input,
         (conv_output_height + conv_block.y - 1) / conv_block.y,
         batch_size * out_channels
     );
-
     conv_backward_kernel<<<conv_grid, conv_block, 0, stream3>>>(
         d_bn_grad,  // Grad from BN
         d_cache,             // Cached input
@@ -216,10 +227,11 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input,
         conv_output_height,
         conv_output_width
     );
+    std::cout << "Convolution backward done" << std::endl;
     const int block_size = 256;
     const int total_params = out_channels * in_channels * kernel_size * kernel_size;
     const int num_blocks_scale = (total_params + block_size - 1) / block_size;
-
+    
     scale_gradients<<<num_blocks_scale, block_size, 0, stream3>>>(
         d_weight_grad,
         d_bias_grad,
@@ -228,14 +240,15 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input,
         out_channels
     );
     cudaStreamSynchronize(stream3);
-
+    std::cout << "Scale gradients done" << std::endl;
     // Update parameters using Adam optimizer
     weights_optimizer.update(d_weights, d_weight_grad);
     bias_optimizer.update(d_biases, d_bias_grad);
     gamma_optimizer.update(d_gamma, d_gamma_grad);
     beta_optimizer.update(d_beta, d_beta_grad);
-
+    std::cout << "Parameters updated" << std::endl;
     // Synchronize all streams
+    std::cout << "Synchronizing streams" << std::endl;
     cudaStreamSynchronize(stream1);
     cudaStreamSynchronize(stream2);
     cudaStreamSynchronize(stream3);
