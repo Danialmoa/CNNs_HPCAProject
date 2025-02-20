@@ -125,6 +125,12 @@ void test_conv_block() {
         // print_tensor(h_grad_input.data(), batch_size, in_channels, height, width, 
         //             "Gradient Output (should be [batch,in_channels,height,width])");
 
+        // show the output of the conv block
+        std::vector<float> h_output(batch_size * out_channels * pool_out_height * pool_out_width);
+        CHECK_CUDA_ERROR(cudaMemcpy(h_output.data(), d_output, output_size, cudaMemcpyDeviceToHost));
+        print_tensor(h_output.data(), batch_size, out_channels, pool_out_height, pool_out_width, 
+                     "Output of the conv block");
+
         // Multiple iterations test
         for (int i = 0; i < 3; i++) {
             conv_block.forward(d_input, d_output, batch_size, height, width);
