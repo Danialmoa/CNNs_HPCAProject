@@ -47,7 +47,7 @@ void test_conv_block() {
     std::cout << "Input dimensions: " << height << "x" << width << "\n";
     std::cout << "Output dimensions: " << conv_out_height << "x" << conv_out_width << "\n";
     std::cout << "Pooling dimensions: " << pool_out_height << "x" << pool_out_width << "\n";
-    
+
 
     // Create input data
     std::vector<float> h_input(batch_size * in_channels * height * width);
@@ -68,6 +68,9 @@ void test_conv_block() {
     CHECK_CUDA_ERROR(cudaMalloc(&d_grad_output, output_size));
     CHECK_CUDA_ERROR(cudaMalloc(&d_grad_input, input_size));
 
+    CHECK_CUDA_ERROR(cudaMemset(d_grad_output, 0, output_size));
+    CHECK_CUDA_ERROR(cudaMemset(d_grad_input, 0, input_size));
+    
     // Copy input to device
     CHECK_CUDA_ERROR(cudaMemcpy(d_input, h_input.data(), input_size, cudaMemcpyHostToDevice));
 
