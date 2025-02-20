@@ -65,8 +65,8 @@ void check_tensor_values(const char* name, float* d_tensor, int size) {
     float* h_tensor = new float[size];
     cudaMemcpy(h_tensor, d_tensor, size * sizeof(float), cudaMemcpyDeviceToHost);
     
-    float max_val = -FLT_MAX;
-    float min_val = FLT_MAX;
+    float max_val = 10;
+    float min_val = -10;
     float sum = 0.0f;
     bool has_nan = false;
     bool has_inf = false;
