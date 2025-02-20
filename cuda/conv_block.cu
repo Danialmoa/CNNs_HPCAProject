@@ -135,15 +135,7 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input,
         std::cerr << "Expected: " << current_batch_size << ", Got: " << batch_size << std::endl;
         throw std::runtime_error("Batch size mismatch in backward pass");
     }
-    //Debug
-    std::cout << "Backward pass" << std::endl;
-    std::cout << "batch_size: " << batch_size << " height: " << height << " width: " << width << std::endl;
-    std::cout << "current_batch_size: " << current_batch_size << " input_height: " << input_height << " input_width: " << input_width << std::endl;
-    std::cout << "out_channels: " << out_channels << " conv_output_height: " << conv_output_height << " conv_output_width: " << conv_output_width << std::endl;
-    std::cout << "pool_output_height: " << pool_output_height << " pool_output_width: " << pool_output_width << std::endl;
-    std::cout << "in_channels: " << in_channels << " kernel_size: " << kernel_size << " stride: " << stride << " padding: " << padding << std::endl;
-    std::cout << "pool_size: " << pool_size << " pool_stride: " << pool_stride << std::endl;
-
+    
     if (d_pool_grad == nullptr || d_relu_grad == nullptr || d_bn_grad == nullptr) {
         allocate_memory(batch_size);
     }
@@ -178,8 +170,6 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input,
     );
     cudaStreamSynchronize(stream1);
 
-    std::cout << "Pooling backward done" << std::endl;
-
     // 2. ReLU Backward
     relu_backward_kernel<<<conv_output_size, 256, 0, stream2>>>(
         d_pool_grad,  // Grad from pooling
@@ -188,7 +178,6 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input,
         conv_output_size
     );
     cudaStreamSynchronize(stream2);
-    std::cout << "ReLU backward done" << std::endl;
     // 3. Batch Normalization Backward
     const int threads_per_block = 256;
     batch_norm_backward_kernel<<<out_channels, threads_per_block, 0, stream2>>>(
@@ -207,7 +196,6 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input,
         bn_epsilon
     );
     cudaStreamSynchronize(stream2);
-    std::cout << "Batch normalization backward done" << std::endl;
     // 4. Convolution Backward
     dim3 conv_block(16, 16);
     dim3 conv_grid(
@@ -234,7 +222,6 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input,
         conv_output_width
     );
     cudaStreamSynchronize(stream3);
-    std::cout << "Convolution backward done" << std::endl;
     const int block_size = 256;
     const int total_params = out_channels * in_channels * kernel_size * kernel_size;
     const int num_blocks_scale = (total_params + block_size - 1) / block_size;
@@ -247,15 +234,12 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input,
         out_channels
     );
     cudaStreamSynchronize(stream3);
-    std::cout << "Scale gradients done" << std::endl;
     // Update parameters using Adam optimizer
     weights_optimizer.update(d_weights, d_weight_grad);
     bias_optimizer.update(d_biases, d_bias_grad);
     gamma_optimizer.update(d_gamma, d_gamma_grad);
     beta_optimizer.update(d_beta, d_beta_grad);
-    std::cout << "Parameters updated" << std::endl;
     // Synchronize all streams
-    std::cout << "Synchronizing streams" << std::endl;
     CHECK_CUDA_ERROR(cudaStreamSynchronize(stream1));
     CHECK_CUDA_ERROR(cudaStreamSynchronize(stream2));
     CHECK_CUDA_ERROR(cudaStreamSynchronize(stream3));
@@ -282,8 +266,6 @@ void ConvBlock::init_weights_and_optimizers() {
     for (size_t i = 0; i < weights_size; ++i) {
         h_weights[i] = weight_dist(gen);
     }
-    std::cout << "Allocating memory" << std::endl;
-
     CHECK_CUDA_ERROR(cudaMalloc(&d_weights, weights_size * sizeof(float)));
     CHECK_CUDA_ERROR(cudaMalloc(&d_biases, bias_size * sizeof(float)));
     CHECK_CUDA_ERROR(cudaMalloc(&d_weight_grad, weights_size * sizeof(float)));
@@ -304,21 +286,15 @@ void ConvBlock::init_weights_and_optimizers() {
     CHECK_CUDA_ERROR(cudaMemcpy(d_running_var, h_running_stats.data(), out_channels * sizeof(float), cudaMemcpyHostToDevice));
 
     // Initialize optimizers
-    std::cout << "Initializing optimizers" << std::endl;
     weights_optimizer = AdamOptimizer(weights_size, learning_rate);
-    std::cout << "Weights optimizer initialized" << std::endl;
     bias_optimizer = AdamOptimizer(bias_size, learning_rate);
-    std::cout << "Bias optimizer initialized" << std::endl;
     gamma_optimizer = AdamOptimizer(out_channels, learning_rate);
-    std::cout << "Gamma optimizer initialized" << std::endl;
     beta_optimizer = AdamOptimizer(out_channels, learning_rate);
-    std::cout << "Beta optimizer initialized" << std::endl;
 
     CHECK_CUDA_ERROR(cudaStreamSynchronize(stream1));
     CHECK_CUDA_ERROR(cudaStreamSynchronize(stream2));
     CHECK_CUDA_ERROR(cudaStreamSynchronize(stream3));
     CHECK_CUDA_ERROR(cudaDeviceSynchronize());
-    std::cout << "Initialization done" << std::endl;
 }
 
 void ConvBlock::init_streams() {
@@ -332,7 +308,6 @@ void ConvBlock::init_streams() {
 
 void ConvBlock::allocate_memory(int batch_size) {
     if (current_batch_size != batch_size || d_conv_output_cache == nullptr) {
-        std::cout << "Allocating memory" << std::endl;
         free_memory();
         
         // Calculate sizes
