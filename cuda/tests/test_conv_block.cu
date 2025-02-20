@@ -105,11 +105,11 @@ void test_conv_block() {
         conv_block.backward(d_grad_output, d_grad_input, batch_size, height, width);
 
         // Get backward output
-        std::vector<float> h_grad_input(batch_size * in_channels * height * width);
+        std::vector<float> h_grad_input(batch_size * in_channels * pool_out_height * pool_out_width);
         CHECK_CUDA_ERROR(cudaMemcpy(h_grad_input.data(), d_grad_input, input_size, cudaMemcpyDeviceToHost));
 
         // Print sample of gradients
-        print_tensor(h_grad_input.data(), batch_size, in_channels, height, width, "Gradient Output");
+        print_tensor(h_grad_input.data(), batch_size, in_channels, pool_out_height, pool_out_width, "Gradient Output");
 
         // Verify shapes
         std::cout << "\nShape verification:" << std::endl;
