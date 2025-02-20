@@ -267,51 +267,38 @@ void ConvBlock::init_weights_and_optimizers() {
 
     // Xavier/Glorot initialization for weights
     float weight_bound = sqrt(6.0f / (in_channels + out_channels));
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_real_distribution<float> weight_dist(-weight_bound, weight_bound);
-
-    // Allocate host memory and initialize weights
     std::vector<float> h_weights(weights_size);
-    std::vector<float> h_biases(bias_size, 0.0f);  // Initialize biases to zero
-
-    for (size_t i = 0; i < weights_size; ++i) {
-        h_weights[i] = weight_dist(gen);
-    }
-
-    // Allocate and copy to device memory
-    cudaMalloc(&d_weights, weights_size * sizeof(float));
-    cudaMalloc(&d_biases, bias_size * sizeof(float));
-    cudaMemcpy(d_weights, h_weights.data(), weights_size * sizeof(float), 
-               cudaMemcpyHostToDevice);
-    cudaMemcpy(d_biases, h_biases.data(), bias_size * sizeof(float), 
-               cudaMemcpyHostToDevice);
-
-    CHECK_CUDA_ERROR(cudaMalloc(&d_weight_grad, weights_size * sizeof(float)));
-    CHECK_CUDA_ERROR(cudaMalloc(&d_bias_grad, bias_size * sizeof(float)));
-    CHECK_CUDA_ERROR(cudaMalloc(&d_gamma_grad, out_channels * sizeof(float)));
-    CHECK_CUDA_ERROR(cudaMalloc(&d_beta_grad, out_channels * sizeof(float)));
-
-    // Initialize batch norm parameters
-    cudaMalloc(&d_gamma, out_channels * sizeof(float));
-    cudaMalloc(&d_beta, out_channels * sizeof(float));
-    cudaMalloc(&d_running_mean, out_channels * sizeof(float));
-    cudaMalloc(&d_running_var, out_channels * sizeof(float));
-    cudaMalloc(&d_batch_mean, out_channels * sizeof(float));
-    cudaMalloc(&d_batch_var, out_channels * sizeof(float));
-
+    std::vector<float> h_biases(bias_size, 0.0f);
     std::vector<float> h_gamma(out_channels, 1.0f);
     std::vector<float> h_beta(out_channels, 0.0f);
     std::vector<float> h_running_stats(out_channels, 0.0f);
 
-    cudaMemcpy(d_gamma, h_gamma.data(), out_channels * sizeof(float), 
-               cudaMemcpyHostToDevice);
-    cudaMemcpy(d_beta, h_beta.data(), out_channels * sizeof(float), 
-               cudaMemcpyHostToDevice);
-    cudaMemcpy(d_running_mean, h_running_stats.data(), 
-               out_channels * sizeof(float), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_running_var, h_running_stats.data(), 
-               out_channels * sizeof(float), cudaMemcpyHostToDevice);
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_real_distribution<float> weight_dist(-weight_bound, weight_bound);
+
+    for (size_t i = 0; i < weights_size; ++i) {
+        h_weights[i] = weight_dist(gen);
+    }
+    std::cout << "Allocating memory" << std::endl;
+    CHECK_CUDA_ERROR(cudaMalloc(&d_weights, weights_size * sizeof(float)));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_biases, bias_size * sizeof(float)));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_weight_grad, weights_size * sizeof(float)));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_bias_grad, bias_size * sizeof(float)));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_gamma, out_channels * sizeof(float)));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_beta, out_channels * sizeof(float)));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_gamma_grad, out_channels * sizeof(float)));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_beta_grad, out_channels * sizeof(float)));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_running_mean, out_channels * sizeof(float)));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_running_var, out_channels * sizeof(float)));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_batch_mean, out_channels * sizeof(float)));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_batch_var, out_channels * sizeof(float)));
+    CHECK_CUDA_ERROR(cudaMemcpy(d_weights, h_weights.data(), weights_size * sizeof(float), cudaMemcpyHostToDevice));
+    CHECK_CUDA_ERROR(cudaMemcpy(d_biases, h_biases.data(), bias_size * sizeof(float), cudaMemcpyHostToDevice));
+    CHECK_CUDA_ERROR(cudaMemcpy(d_gamma, h_gamma.data(), out_channels * sizeof(float), cudaMemcpyHostToDevice));
+    CHECK_CUDA_ERROR(cudaMemcpy(d_beta, h_beta.data(), out_channels * sizeof(float), cudaMemcpyHostToDevice));
+    CHECK_CUDA_ERROR(cudaMemcpy(d_running_mean, h_running_stats.data(), out_channels * sizeof(float), cudaMemcpyHostToDevice));
+    CHECK_CUDA_ERROR(cudaMemcpy(d_running_var, h_running_stats.data(), out_channels * sizeof(float), cudaMemcpyHostToDevice));
 
     // Initialize optimizers
     weights_optimizer = AdamOptimizer(weights_size, learning_rate);
