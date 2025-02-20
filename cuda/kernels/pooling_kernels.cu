@@ -63,17 +63,21 @@ __global__ void max_pool_backward_kernel(
     int out_height,
     int out_width
 ) {
-    int batch = blockIdx.x;
-    int channel = blockIdx.y;
-    int h = blockIdx.z / out_width;
-    int w = blockIdx.z % out_width;
+    const int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    const int total_elements = batch_size * channels * out_height * out_width;
     
-    if (batch >= batch_size || channel >= channels || 
-        h >= out_height || w >= out_width) return;
-        
-    int out_idx = ((batch * channels + channel) * out_height + h) * out_width + w;
-    int in_idx = indices[out_idx];
+    if (idx >= total_elements) return;
     
-    // Propagate gradient through max pooling
-    atomicAdd(&grad_input[in_idx], grad_output[out_idx]);
+    // Calculate position
+    const int w = idx % out_width;
+    const int h = (idx / out_width) % out_height;
+    const int c = (idx / (out_width * out_height)) % channels;
+    const int b = idx / (out_width * out_height * channels);
+    
+    const int out_idx = ((b * channels + c) * out_height + h) * out_width + w;
+    const int in_idx = indices[out_idx];
+    
+    if (in_idx >= 0) {  // Validate index
+        atomicAdd(&grad_input[in_idx], grad_output[out_idx]);
+    }
 }

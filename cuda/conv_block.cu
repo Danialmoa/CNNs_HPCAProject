@@ -7,6 +7,23 @@
 #include <cmath>
 #include <iostream>
 
+__global__ void scale_gradients(
+    float* weight_grad,
+    float* bias_grad,
+    float scale,
+    int total_weights,
+    int num_biases
+) {
+    const int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    
+    if (idx < total_weights) {
+        weight_grad[idx] *= scale;
+    }
+    if (idx < num_biases) {
+        bias_grad[idx] *= scale;
+    }
+}
+
 ConvBlock::ConvBlock(int in_ch, int out_ch, int k_size, 
                      int s, int p, int pool_s, int pool_str, 
                      float lr) 
@@ -109,6 +126,8 @@ void ConvBlock::forward(const float* d_input, float* d_output,
 
 void ConvBlock::backward(const float* d_grad_output, float* d_grad_input,
                         int batch_size, int height, int width) {
+
+    const float grad_scale = 1.0f / (batch_size * out_channels);
     // 1. Max Pooling Backward
     dim3 pool_block(16, 16);
     dim3 pool_grid(batch_size, out_channels, 
@@ -117,6 +136,9 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input,
     // Zero initialize gradients
     cudaMemsetAsync(d_conv_output_cache, 0, 
         batch_size * out_channels * conv_output_height * conv_output_width * sizeof(float),
+        stream1);
+    cudaMemsetAsync(d_grad_input, 0,
+        batch_size * in_channels * height * width * sizeof(float),
         stream1);
 
     max_pool_backward_kernel<<<pool_grid, pool_block, 0, stream1>>>(
@@ -153,6 +175,7 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input,
             out_channels * in_channels * kernel_size * kernel_size * sizeof(float)));
         CHECK_CUDA_ERROR(cudaMalloc(&d_bias_grad, out_channels * sizeof(float)));
     }
+    
 
     relu_backward_kernel<<<num_blocks, block_size, 0, stream2>>>(
         d_conv_output_cache,  // Grad from pooling
@@ -204,6 +227,18 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input,
         padding,
         conv_output_height,
         conv_output_width
+    );
+
+    const int total_params = out_channels * in_channels * kernel_size * kernel_size;
+    const int block_size = 256;
+    const int num_blocks = (total_params + block_size - 1) / block_size;
+
+    scale_gradients<<<num_blocks, block_size, 0, stream3>>>(
+        d_weight_grad,
+        d_bias_grad,
+        grad_scale,
+        total_params,
+        out_channels
     );
 
     // Update parameters using Adam optimizer
