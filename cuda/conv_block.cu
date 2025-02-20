@@ -227,6 +227,7 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input,
         conv_output_height,
         conv_output_width
     );
+    cudaStreamSynchronize(stream3);
     std::cout << "Convolution backward done" << std::endl;
     const int block_size = 256;
     const int total_params = out_channels * in_channels * kernel_size * kernel_size;
