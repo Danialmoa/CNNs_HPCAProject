@@ -36,9 +36,11 @@ void test_simple_convolution() {
     };
     
     // Expected output: [batch_size, out_channels, out_height, out_width]
-    const float expected_output[4] = {
-        8, -8,
-        8, -8
+    const float expected_output[16] = {
+        -4, -1, 1, 4,
+        -7, -3, 3, 7,
+        -7, -3, 3, 7,
+        -4, -1, 1, 4
     };
     
     // Allocate device memory
@@ -116,11 +118,18 @@ void test_simple_convolution() {
     }
     
     std::cout << "\nConvolution Results:\n";
-    std::cout << "Expected:\n";
+    std::cout << "Actual:\n";
     
     for (int i = 0; i < out_height; i++) {
         for (int j = 0; j < out_width; j++) {
             std::cout << output[i * out_width + j] << " ";
+        }
+        std::cout << std::endl;
+    }
+    std::cout << "Expected:\n";
+    for (int i = 0; i < out_height; i++) {
+        for (int j = 0; j < out_width; j++) {
+            std::cout << expected_output[i * out_width + j] << " ";
         }
         std::cout << std::endl;
     }
