@@ -24,6 +24,24 @@ __global__ void scale_gradients(
     }
 }
 
+__global__ void clip_gradients_kernel(float* grad, int size, float threshold) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < size) {
+        float val = grad[idx];
+        if (isnan(val) || isinf(val)) {
+            grad[idx] = 0.0f;
+        } else {
+            grad[idx] = fmaxf(fminf(val, threshold), -threshold);
+        }
+    }
+}
+void clip_gradients(float* d_grad, int size, float threshold) {
+    const int block_size = 256;
+    const int num_blocks = (size + block_size - 1) / block_size;
+    clip_gradients_kernel<<<num_blocks, block_size>>>(d_grad, size, threshold);
+    cudaDeviceSynchronize();
+}
+
 ConvBlock::ConvBlock(int in_ch, int out_ch, int k_size, 
                      int s, int p, int pool_s, int pool_str, 
                      float lr) 
@@ -182,8 +200,9 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input,
         pool_output_height,
         pool_output_width
     );
+    clip_gradients(d_pool_grad, conv_output_size, 1.0f);
     cudaStreamSynchronize(stream1);
-
+    
     // 2. ReLU Backward
     relu_backward_kernel<<<conv_output_size, 256, 0, stream2>>>(
         d_pool_grad,  // Grad from pooling
@@ -191,6 +210,7 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input,
         d_relu_grad,
         conv_output_size
     );
+    clip_gradients(d_relu_grad, conv_output_size, 1.0f);
     cudaStreamSynchronize(stream2);
     // 3. Batch Normalization Backward
     const int threads_per_block = 256;
@@ -209,6 +229,7 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input,
         conv_output_width,
         bn_epsilon
     );
+    clip_gradients(d_bn_grad, conv_output_size, 1.0f);
     cudaStreamSynchronize(stream2);
     // 4. Convolution Backward
     dim3 conv_block(16, 16);
@@ -235,6 +256,9 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input,
         conv_output_height,
         conv_output_width
     );
+    clip_gradients(d_grad_input, batch_size * in_channels * height * width, 1.0f);
+    clip_gradients(d_weight_grad, out_channels * in_channels * kernel_size * kernel_size, 1.0f);
+    clip_gradients(d_bias_grad, out_channels, 1.0f);
     cudaStreamSynchronize(stream3);
     const int block_size = 256;
     const int total_params = out_channels * in_channels * kernel_size * kernel_size;
@@ -275,7 +299,7 @@ void ConvBlock::init_weights_and_optimizers() {
 
     std::random_device rd;
     std::mt19937 gen(rd());
-    std::uniform_real_distribution<float> weight_dist(-weight_bound, weight_bound);
+    std::normal_distribution<float> weight_dist(0.0f, weight_bound);
 
     for (size_t i = 0; i < weights_size; ++i) {
         h_weights[i] = weight_dist(gen);

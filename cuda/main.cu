@@ -46,7 +46,7 @@ float calculate_accuracy(const float* d_predictions, const uint8_t* d_labels, in
     CHECK_CUDA_ERROR(cudaMalloc(&d_correct, sizeof(int)));
     CHECK_CUDA_ERROR(cudaMemset(d_correct, 0, sizeof(int)));
 
-    int threadsPerBlock = 32;
+    int threadsPerBlock = 256;
     int numBlocks = (batch_size + threadsPerBlock - 1) / threadsPerBlock;
     
     calculate_accuracy_kernel<<<numBlocks, threadsPerBlock>>>(
