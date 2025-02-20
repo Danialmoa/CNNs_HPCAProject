@@ -34,7 +34,7 @@ __global__ void adam_update_kernel(
 
 AdamOptimizer::AdamOptimizer(int param_size, float lr, float b1, float b2, float eps)
     : size(param_size), learning_rate(lr), beta1(b1), beta2(b2), 
-      epsilon(eps), t(0) {
+      epsilon(eps), t(0), d_m(nullptr), d_v(nullptr){
     if (size > 0) {
         cudaMalloc(&d_m, size * sizeof(float));
         cudaMalloc(&d_v, size * sizeof(float));
@@ -44,14 +44,21 @@ AdamOptimizer::AdamOptimizer(int param_size, float lr, float b1, float b2, float
 }
 
 AdamOptimizer::~AdamOptimizer() {
-    if (size > 0) {
+    if (d_m != nullptr) {
         cudaFree(d_m);
+        d_m = nullptr;
+    }
+    if (d_v != nullptr) {
         cudaFree(d_v);
+        d_v = nullptr;
     }
 }
 
 void AdamOptimizer::update(float* params, const float* gradients) {
-    if (size == 0) return;
+    if (size == 0 || params == nullptr || gradients == nullptr || 
+        d_m == nullptr || d_v == nullptr) {
+        return; 
+    }
     
     t++;
     float beta1_t = pow(beta1, t);

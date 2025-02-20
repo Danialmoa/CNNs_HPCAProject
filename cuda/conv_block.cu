@@ -287,6 +287,11 @@ void ConvBlock::init_weights_and_optimizers() {
     cudaMemcpy(d_biases, h_biases.data(), bias_size * sizeof(float), 
                cudaMemcpyHostToDevice);
 
+    CHECK_CUDA_ERROR(cudaMalloc(&d_weight_grad, weights_size * sizeof(float)));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_bias_grad, bias_size * sizeof(float)));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_gamma_grad, out_channels * sizeof(float)));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_beta_grad, out_channels * sizeof(float)));
+
     // Initialize batch norm parameters
     cudaMalloc(&d_gamma, out_channels * sizeof(float));
     cudaMalloc(&d_beta, out_channels * sizeof(float));
