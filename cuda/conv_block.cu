@@ -258,6 +258,15 @@ void ConvBlock::backward(const float* d_grad_output, float* d_grad_input,
     CHECK_CUDA_ERROR(cudaStreamSynchronize(stream2));
     CHECK_CUDA_ERROR(cudaStreamSynchronize(stream3));
     CHECK_CUDA_ERROR(cudaDeviceSynchronize());
+
+    // Add gradient clipping
+    const float clip_threshold = 2.0f;
+    
+    // After computing gradients
+    for (int i = 0; i < total_params; i++) {
+        if (d_weight_grad[i] > clip_threshold) d_weight_grad[i] = clip_threshold;
+        if (d_weight_grad[i] < -clip_threshold) d_weight_grad[i] = -clip_threshold;
+    }
 }
 
 void ConvBlock::init_weights_and_optimizers() {
@@ -266,7 +275,7 @@ void ConvBlock::init_weights_and_optimizers() {
     size_t bias_size = out_channels;
 
     // Xavier/Glorot initialization for weights
-    float weight_bound = sqrt(6.0f / (in_channels + out_channels));
+    float weight_bound = sqrt(2.0f / (in_channels * kernel_size * kernel_size)) * 0.1f;
     std::vector<float> h_weights(weights_size);
     std::vector<float> h_biases(bias_size, 0.0f);
     std::vector<float> h_gamma(out_channels, 1.0f);
